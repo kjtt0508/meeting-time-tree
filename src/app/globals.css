@@ -24,3 +24,31 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* src/app/globals.css */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* React Flow のハンドルを普段は小さく、ホバーで大きく */
+.react-flow__handle {
+  width: 8px;
+  height: 8px;
+  opacity: 0.3;
+  transition: opacity 0.2s, transform 0.2s;
+}
+.react-flow__node:hover .react-flow__handle {
+  opacity: 1;
+  transform: scale(1.4);
+}
+
+/* スクロールバー */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 3px;
+}
+
