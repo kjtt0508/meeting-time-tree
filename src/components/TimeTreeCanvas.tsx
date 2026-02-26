@@ -15,7 +15,6 @@ import {
   type Node,
   type Edge,
   type NodeTypes,
-  Panel,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
@@ -30,17 +29,16 @@ import {
 import MeetingNode from "./MeetingNode";
 import MeetingDetailModal from "./MeetingDetailModal";
 import Sidebar from "./Sidebar";
-import TimelineBackground from "./TimelineBackground";
+import TimelineRuler from "./TimelineRuler";
 import { v4 as uuidv4 } from "uuid";
 
-// --- React Flow にカスタムノードを登録 ---
 const nodeTypes: NodeTypes = {
   meetingCard: MeetingNode,
 };
 
-/**
- * Meeting → React Flow Node に変換
- */
+// Sidebar の w-64 = 256px
+const SIDEBAR_WIDTH = 256;
+
 function meetingToNode(
   m: Meeting,
   project: Project,
@@ -67,7 +65,6 @@ function meetingToNode(
 }
 
 export default function TimeTreeCanvas() {
-  // --- State ---
   const [projects, setProjects] = useState<Project[]>(sampleProjects);
   const [meetings, setMeetings] = useState<Meeting[]>(sampleMeetings);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
@@ -75,7 +72,6 @@ export default function TimeTreeCanvas() {
 
   const earliestDate = useMemo(() => getEarliestDate(meetings), [meetings]);
 
-  // 詳細モーダルを開く
   const handleOpenDetail = useCallback(
     (nodeId: string) => {
       const mtg = meetings.find((m) => m.id === nodeId);
@@ -87,9 +83,7 @@ export default function TimeTreeCanvas() {
     [meetings]
   );
 
-  // --- Nodes & Edges ---
   const initialNodes: Node[] = useMemo(() => {
-    // プロジェクトヘッダーノード
     const headers: Node[] = projects.map((pj) => ({
       id: `header-${pj.id}`,
       type: "default",
@@ -109,7 +103,6 @@ export default function TimeTreeCanvas() {
       },
     }));
 
-    // 会議カードノード
     const cards: Node[] = meetings.map((m) => {
       const pj = projects.find((p) => p.id === m.projectId)!;
       return meetingToNode(m, pj, earliestDate, handleOpenDetail);
@@ -118,7 +111,6 @@ export default function TimeTreeCanvas() {
     return [...headers, ...cards];
   }, [projects, meetings, earliestDate, handleOpenDetail]);
 
-  // 同一プロジェクト内の時系列エッジ（デフォルト）
   const initialEdges: Edge[] = useMemo(() => {
     const edges: Edge[] = [];
     for (const pj of projects) {
@@ -145,7 +137,6 @@ export default function TimeTreeCanvas() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
-  // ノード間を手動で線でつなぐ
   const onConnect = useCallback(
     (params: Connection) => {
       setEdges((eds) =>
@@ -162,13 +153,11 @@ export default function TimeTreeCanvas() {
     [setEdges]
   );
 
-  // --- 会議カードの保存 ---
   const handleSaveMeeting = useCallback(
     (updated: Meeting) => {
       setMeetings((prev) =>
         prev.map((m) => (m.id === updated.id ? updated : m))
       );
-      // ノードのデータも更新
       setNodes((nds) =>
         nds.map((n) => {
           if (n.id === updated.id) {
@@ -196,7 +185,6 @@ export default function TimeTreeCanvas() {
     [earliestDate, setNodes]
   );
 
-  // --- 会議カードの削除 ---
   const handleDeleteMeeting = useCallback(
     (id: string) => {
       setMeetings((prev) => prev.filter((m) => m.id !== id));
@@ -209,11 +197,9 @@ export default function TimeTreeCanvas() {
     [setNodes, setEdges]
   );
 
-  // --- プロジェクト追加 ---
   const handleAddProject = useCallback(
     (project: Project) => {
       setProjects((prev) => [...prev, project]);
-      // ヘッダーノード追加
       setNodes((nds) => [
         ...nds,
         {
@@ -239,7 +225,6 @@ export default function TimeTreeCanvas() {
     [setNodes]
   );
 
-  // --- 会議追加 ---
   const handleAddMeeting = useCallback(
     (projectId: string) => {
       const pj = projects.find((p) => p.id === projectId);
@@ -257,11 +242,9 @@ export default function TimeTreeCanvas() {
       };
 
       setMeetings((prev) => [...prev, newMeeting]);
-
       const node = meetingToNode(newMeeting, pj, earliestDate, handleOpenDetail);
       setNodes((nds) => [...nds, node]);
 
-      // 自動で詳細モーダルを開く
       setSelectedMeeting(newMeeting);
       setModalOpen(true);
     },
@@ -270,16 +253,13 @@ export default function TimeTreeCanvas() {
 
   return (
     <div className="flex h-screen w-screen">
-      {/* サイドバー */}
       <Sidebar
         projects={projects}
         onAddProject={handleAddProject}
         onAddMeeting={handleAddMeeting}
       />
 
-      {/* メインキャンバス */}
       <div className="flex-1 relative">
-        {/* タイムライン月ラベル (React Flow の上にオーバーレイ) */}
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -301,16 +281,14 @@ export default function TimeTreeCanvas() {
             }}
             position="bottom-left"
           />
-          <Panel position="top-left">
-            <TimelineBackground
-              earliestDate={earliestDate}
-              monthCount={8}
-            />
-          </Panel>
+          {/* useViewport() のコンテキスト内に置く必要があるため ReactFlow の子にする */}
+          <TimelineRuler
+            earliestDate={earliestDate}
+            sidebarWidth={SIDEBAR_WIDTH}
+          />
         </ReactFlow>
       </div>
 
-      {/* 詳細モーダル */}
       <MeetingDetailModal
         meeting={selectedMeeting}
         isOpen={modalOpen}

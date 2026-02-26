@@ -7,7 +7,7 @@ const COLUMN_WIDTH = 300;
 const COLUMN_GAP = 40;
 const COLUMN_START_X = 100;
 const TIME_ORIGIN_Y = 80;        // キャンバス上端の余白
-const PIXELS_PER_DAY = 4;        // 1日あたりのピクセル数
+const PIXELS_PER_DAY = 100;       // 1日あたりのピクセル数（カード高さに合わせて調整）
 
 /**
  * 会議日 → Y座標
@@ -31,9 +31,19 @@ export function projectToX(project: Project): number {
  * 全会議の最古日を取得
  */
 export function getEarliestDate(meetings: Meeting[]): string {
-  return meetings.reduce((min, m) =>
-    m.meetingDate < min ? m.meetingDate : min,
+  return meetings.reduce(
+    (min, m) => (m.meetingDate < min ? m.meetingDate : min),
     meetings[0]?.meetingDate ?? "2025-01-01"
+  );
+}
+
+/**
+ * 全会議の最新日を取得
+ */
+export function getLatestDate(meetings: Meeting[]): string {
+  return meetings.reduce(
+    (max, m) => (m.meetingDate > max ? m.meetingDate : max),
+    meetings[0]?.meetingDate ?? "2025-12-31"
   );
 }
 
