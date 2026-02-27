@@ -5,6 +5,7 @@ export interface Project {
   name: string;
   color: string;
   sortOrder: number;
+  createdDate?: string;      // "YYYY-MM-DD" プロジェクト作成日
 }
 
 export interface Meeting {

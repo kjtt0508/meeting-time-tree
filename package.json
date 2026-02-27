@@ -2,11 +2,14 @@
   "name": "meeting-timetree",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "electron:dev": "next build && tsc -p tsconfig.electron.json && electron .",
+    "electron:build": "next build && npx esbuild electron/src/main.ts electron/src/preload.ts --bundle=false --platform=node --outdir=electron --format=cjs && electron-builder"
   },
   "dependencies": {
     "@xyflow/react": "^12.10.1",
@@ -22,9 +25,33 @@
     "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",
     "babel-plugin-react-compiler": "1.0.0",
+    "electron": "^40.6.1",
+    "electron-builder": "^26.8.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
+    "ts-node": "^10.9.2",
     "typescript": "^5"
+  },
+  "build": {
+    "appId": "com.yourname.timetree",
+    "productName": "Meeting Timetree",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "electron/**/*"
+    ],
+    "mac": {
+      "target": "dmg"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   }
+  
 }
