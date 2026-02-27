@@ -12,44 +12,46 @@ import {
   useEdgesState,
   useReactFlow,
   ReactFlowProvider,
-  addEdge,
   type Connection,
   type Node,
   type Edge,
   type NodeTypes,
-  type NodeChange,
-  applyNodeChanges,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
 import { Project, Meeting } from "@/types";
-import { sampleProjects, sampleMeetings } from "@/data/sampleData";
 import {
   dateToY,
   projectToX,
-  getEarliestDate,
   COLUMN_WIDTH,
   TIME_ORIGIN_Y,
   PIXELS_PER_DAY,
 } from "@/utils/layout";
+import {
+  fetchProjects,
+  fetchMeetings,
+  fetchPlan,
+  insertProject,
+  insertMeeting,
+  updateMeeting,
+  deleteMeeting,
+  deleteProject,
+} from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 import MeetingNode from "./MeetingNode";
 import MeetingDetailModal from "./MeetingDetailModal";
 import Sidebar from "./Sidebar";
 import TimelineRuler from "./TimelineRuler";
 import { v4 as uuidv4 } from "uuid";
 
-const nodeTypes: NodeTypes = {
-  meetingCard: MeetingNode,
-};
+const nodeTypes: NodeTypes = { meetingCard: MeetingNode };
 
 const SIDEBAR_WIDTH = 256;
 const DEFAULT_ZOOM = 0.12;
-
-// Y座標の固定基準日（earliestDateに依存しない絶対座標）
 const ABSOLUTE_ORIGIN = "2020-01-01";
+const FREE_PLAN_PROJECT_LIMIT = 3;
 
 function buildHeaderNode(pj: Project): Node {
-  // earliestDate が渡された場合は作成日のY座標、なければ上部固定
   const y = pj.createdDate
     ? dateToY(pj.createdDate, ABSOLUTE_ORIGIN)
     : dateToY(new Date().toISOString().slice(0, 10), ABSOLUTE_ORIGIN);
@@ -98,37 +100,46 @@ function buildMeetingNode(
 }
 
 // ---- 内部コンポーネント ----
-function TimeTreeCanvasInner() {
-  const [projects, setProjects] = useState<Project[]>(() => {
-    if (typeof window === "undefined") return sampleProjects;
-    const saved = localStorage.getItem("timetree-projects");
-    return saved ? JSON.parse(saved) : sampleProjects;
-  });
-
-  const [meetings, setMeetings] = useState<Meeting[]>(() => {
-    if (typeof window === "undefined") return sampleMeetings;
-    const saved = localStorage.getItem("timetree-meetings");
-    return saved ? JSON.parse(saved) : sampleMeetings;
-  });
-
+function TimeTreeCanvasInner({ userId }: { userId: string }) {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [plan, setPlan] = useState<"free" | "pro">("free");
+  const [loading, setLoading] = useState(true);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
-  useEffect(() => {
-    localStorage.setItem("timetree-projects", JSON.stringify(projects));
-  }, [projects]);
-
-  useEffect(() => {
-    localStorage.setItem("timetree-meetings", JSON.stringify(meetings));
-  }, [meetings]);
-
-  const earliestDate = useMemo(() => getEarliestDate(meetings), [meetings]);
-
-  // meetings の最新値を同期的に参照するための ref
   const meetingsRef = useRef(meetings);
   useEffect(() => { meetingsRef.current = meetings; }, [meetings]);
 
   const { setViewport } = useReactFlow();
+
+  // 初回データ取得
+  useEffect(() => {
+    (async () => {
+      const [pjs, mtgs, userPlan] = await Promise.all([
+        fetchProjects(userId),
+        fetchMeetings(userId),
+        fetchPlan(userId),
+      ]);
+      setProjects(pjs);
+      setMeetings(mtgs);
+      setPlan(userPlan);
+      setLoading(false);
+    })();
+  }, [userId]);
+
+  // upgraded=true のクエリパラメータがある場合はプランを再取得
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("upgraded") === "true") {
+      fetchPlan(userId).then((newPlan) => {
+        setPlan(newPlan);
+        // クエリパラメータを消す
+        window.history.replaceState({}, "", "/");
+      });
+    }
+  }, [userId]);
 
   const handleOpenDetail = useCallback((nodeId: string) => {
     setMeetings((prev) => {
@@ -141,55 +152,47 @@ function TimeTreeCanvasInner() {
     });
   }, []);
 
-  // --- useNodesState でノードを管理（ドラッグはReactFlow内部で完結） ---
-  const initialNodes = useMemo(() => {
-    const headers = projects.map((pj) => buildHeaderNode(pj));
-    const cards = meetings.flatMap((m) => {
-      const pj = projects.find((p) => p.id === m.projectId);
-      if (!pj) return [];
-      return [buildMeetingNode(m, pj, handleOpenDetail)];
-    });
-    return [...headers, ...cards];
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 初回のみ
-
+  // ノード初期値（ローディング完了後に設定）
+  const initialNodes: Node[] = [];
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
 
-  // meetings/projects が外部から変わったとき（追加・編集・削除）だけノードを同期
-  // ドラッグ位置は既存ノードから引き継ぐ
+  // projects/meetings が変わったらノードを同期
   useEffect(() => {
+    if (loading) return;
     setNodes((prevNodes) => {
       const posMap: Record<string, { x: number; y: number }> = {};
       prevNodes.forEach((n) => { posMap[n.id] = n.position; });
 
-      // headerはsortOrder変更時にX座標を再計算するためposMapを使わない
-      const headers = projects.map((pj) => buildHeaderNode(pj));
+      const headers = projects.map(buildHeaderNode);
       const cards = meetings.flatMap((m) => {
         const pj = projects.find((p) => p.id === m.projectId);
-        if (!pj) return []; // プロジェクトが見つからない場合はスキップ
+        if (!pj) return [];
         const node = buildMeetingNode(m, pj, handleOpenDetail);
-        // ドラッグ済みの位置があれば引き継ぐ
         if (posMap[m.id]) node.position = posMap[m.id];
         return [node];
       });
       return [...headers, ...cards];
     });
-  }, [projects, meetings, handleOpenDetail, setNodes]);
+  }, [projects, meetings, handleOpenDetail, setNodes, loading]);
 
-  // 起動時に今日を画面中央に
+  // 起動時に今日を中央に（ノード描画後に実行するため少し遅延）
   useEffect(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    const todayCanvasY =
-      TIME_ORIGIN_Y +
-      ((new Date(today).getTime() - new Date(ABSOLUTE_ORIGIN).getTime()) / 86400000) *
-        PIXELS_PER_DAY;
-    const screenH = window.innerHeight;
-    const screenW = window.innerWidth - SIDEBAR_WIDTH;
-    const viewY = screenH / 2 - todayCanvasY * DEFAULT_ZOOM;
-    const viewX = screenW / 2 - ((projects.length * (COLUMN_WIDTH + 40)) / 2) * DEFAULT_ZOOM;
-    setViewport({ x: viewX, y: viewY, zoom: DEFAULT_ZOOM }, { duration: 0 });
+    if (loading) return;
+    const timer = setTimeout(() => {
+      const today = new Date().toISOString().slice(0, 10);
+      const todayCanvasY =
+        TIME_ORIGIN_Y +
+        ((new Date(today).getTime() - new Date(ABSOLUTE_ORIGIN).getTime()) / 86400000) *
+          PIXELS_PER_DAY;
+      const screenH = window.innerHeight;
+      const screenW = window.innerWidth - SIDEBAR_WIDTH;
+      const viewY = screenH / 2 - todayCanvasY * DEFAULT_ZOOM;
+      const viewX = screenW / 2 - ((projects.length * (COLUMN_WIDTH + 40)) / 2) * DEFAULT_ZOOM;
+      setViewport({ x: viewX, y: viewY, zoom: DEFAULT_ZOOM }, { duration: 0 });
+    }, 100);
+    return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loading]);
 
   // edges
   const derivedEdges: Edge[] = useMemo(() => {
@@ -233,64 +236,126 @@ function TimeTreeCanvasInner() {
     [setExtraEdges]
   );
 
-  const handleSaveMeeting = useCallback((updated: Meeting) => {
-    setMeetings((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
-    setModalOpen(false);
-  }, []);
+  // ---- ハンドラ ----
 
-  const handleDeleteMeeting = useCallback(
-    (id: string) => {
-      setMeetings((prev) => prev.filter((m) => m.id !== id));
-      setNodes((nds) => nds.filter((n) => n.id !== id));
-      setExtraEdges((eds) => eds.filter((e: Edge) => e.source !== id && e.target !== id));
-      setModalOpen(false);
-    },
-    [setNodes, setExtraEdges]
-  );
-
-  const handleAddProject = useCallback((project: Project) => {
+  const handleAddProject = useCallback(async (project: Project) => {
+    // 無料プランは3個まで
+    if (plan === "free" && projects.length >= FREE_PLAN_PROJECT_LIMIT) {
+      alert(`無料プランはプロジェクトを${FREE_PLAN_PROJECT_LIMIT}個まで作成できます。\nProプランにアップグレードすると無制限になります。`);
+      return;
+    }
     setProjects((prev) => [...prev, project]);
-  }, []);
+    await insertProject(userId, project);
+  }, [plan, projects.length, userId]);
 
-  const handleDeleteProject = useCallback((projectId: string) => {
+  const handleDeleteProject = useCallback(async (projectId: string) => {
     const deletedIds = new Set(
       meetingsRef.current.filter((m) => m.projectId === projectId).map((m) => m.id)
     );
-    // sortOrder はそのまま維持（変更するとX座標がずれる）
     setProjects((prev) => prev.filter((p) => p.id !== projectId));
     setMeetings((prev) => prev.filter((m) => m.projectId !== projectId));
     setNodes((nds) => nds.filter((n) => n.id !== `header-${projectId}` && !deletedIds.has(n.id)));
     setExtraEdges((eds) => eds.filter((e: Edge) => !deletedIds.has(e.source) && !deletedIds.has(e.target)));
+    await deleteProject(projectId); // DBはcascadeで会議も削除される
   }, [setNodes, setExtraEdges]);
 
-  const handleAddMeeting = useCallback(
-    (projectId: string) => {
-      const pj = projects.find((p) => p.id === projectId);
-      if (!pj) return;
-      const today = new Date().toISOString().slice(0, 10);
-      const newMeeting: Meeting = {
-        id: uuidv4(),
-        projectId,
-        title: "新しい会議",
-        meetingDate: today,
-        decisions: "",
-        nextTasks: "",
-        attachmentUrl: "",
-      };
-      setMeetings((prev) => [...prev, newMeeting]);
-      setSelectedMeeting(newMeeting);
-      setModalOpen(true);
-    },
-    [projects]
-  );
+  const handleAddMeeting = useCallback(async (projectId: string) => {
+    const pj = projects.find((p) => p.id === projectId);
+    if (!pj) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const newMeeting: Meeting = {
+      id: uuidv4(),
+      projectId,
+      title: "新しい会議",
+      meetingDate: today,
+      decisions: "",
+      nextTasks: "",
+      attachmentUrl: "",
+    };
+    setMeetings((prev) => [...prev, newMeeting]);
+    setSelectedMeeting(newMeeting);
+    setModalOpen(true);
+    await insertMeeting(userId, newMeeting);
+  }, [projects, userId]);
+
+  const handleSaveMeeting = useCallback(async (updated: Meeting) => {
+    setMeetings((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+    setModalOpen(false);
+    await updateMeeting(updated);
+  }, []);
+
+  const handleDeleteMeeting = useCallback(async (id: string) => {
+    setMeetings((prev) => prev.filter((m) => m.id !== id));
+    setNodes((nds) => nds.filter((n) => n.id !== id));
+    setExtraEdges((eds) => eds.filter((e: Edge) => e.source !== id && e.target !== id));
+    setModalOpen(false);
+    await deleteMeeting(id);
+  }, [setNodes, setExtraEdges]);
+
+  const handleLogout = useCallback(async () => {
+    await supabase.auth.signOut();
+  }, []);
+
+  const handleCancel = useCallback(async () => {
+    const confirmed = window.confirm(
+      "サブスクリプションを解約しますか？\n現在の期間終了後にFreeプランに戻ります。"
+    );
+    if (!confirmed) return;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    const res = await fetch("/api/stripe/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: session.user.id,
+        email: session.user.email,
+      }),
+    });
+
+    if (res.ok) {
+      setPlan("free");
+      alert("解約しました。現在の期間終了後にFreeプランに移行します。");
+    } else {
+      alert("解約に失敗しました。もう一度お試しください。");
+    }
+  }, []);
+
+  const handleUpgrade = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const res = await fetch("/api/stripe/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: session.user.id,
+        email: session.user.email,
+      }),
+    });
+    const { url } = await res.json();
+    if (url) window.open(url, "_blank");
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-gray-900">
+        <p className="text-gray-400">読み込み中...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen w-screen">
       <Sidebar
         projects={projects}
+        plan={plan}
         onAddProject={handleAddProject}
         onAddMeeting={handleAddMeeting}
         onDeleteProject={handleDeleteProject}
+        onLogout={handleLogout}
+        onUpgrade={handleUpgrade}
+        onCancel={handleCancel}
       />
 
       <div className="flex-1 relative">
@@ -312,6 +377,7 @@ function TimeTreeCanvasInner() {
               return (n.data as Record<string, unknown>)?.projectColor as string ?? "#94A3B8";
             }}
             position="bottom-left"
+            style={{ marginLeft: 88 }}
           />
           <TimelineRuler earliestDate={ABSOLUTE_ORIGIN} sidebarWidth={SIDEBAR_WIDTH} />
         </ReactFlow>
@@ -329,9 +395,19 @@ function TimeTreeCanvasInner() {
 }
 
 export default function TimeTreeCanvas() {
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUserId(session?.user?.id ?? null);
+    });
+  }, []);
+
+  if (!userId) return null;
+
   return (
     <ReactFlowProvider>
-      <TimeTreeCanvasInner />
+      <TimeTreeCanvasInner userId={userId} />
     </ReactFlowProvider>
   );
 }

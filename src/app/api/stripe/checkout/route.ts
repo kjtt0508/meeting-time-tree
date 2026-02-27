@@ -1,0 +1,54 @@
+// src/app/api/stripe/checkout/route.ts
+
+import { NextRequest, NextResponse } from "next/server";
+import Stripe from "stripe";
+import { createClient } from "@supabase/supabase-js";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+
+// サービスロールキーで Supabase に接続（サーバーサイドのみ）
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+export async function POST(req: NextRequest) {
+  try {
+    const { userId, email } = await req.json();
+
+    // Stripe Customer を作成（または既存のものを取得）
+    const customers = await stripe.customers.list({ email, limit: 1 });
+    let customerId: string;
+
+    if (customers.data.length > 0) {
+      customerId = customers.data[0].id;
+    } else {
+      const customer = await stripe.customers.create({
+        email,
+        metadata: { supabase_user_id: userId },
+      });
+      customerId = customer.id;
+    }
+
+    // チェックアウトセッション作成
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price: process.env.STRIPE_PRICE_ID!,
+          quantity: 1,
+        },
+      ],
+      mode: "subscription",
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL}?upgraded=true`,
+      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}?upgraded=false`,
+      metadata: { supabase_user_id: userId },
+    });
+
+    return NextResponse.json({ url: session.url });
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({ error: "checkout failed" }, { status: 500 });
+  }
+}

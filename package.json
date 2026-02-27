@@ -4,18 +4,21 @@
   "private": true,
   "main": "electron/main.js",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "electron:dev": "next build && tsc -p tsconfig.electron.json && electron .",
-    "electron:build": "next build && npx esbuild electron/src/main.ts electron/src/preload.ts --bundle=false --platform=node --outdir=electron --format=cjs && electron-builder"
-  },
+  "dev": "next dev",
+  "build": "next build",
+  "start": "next start",
+  "lint": "eslint",
+  "electron:dev": "BUILD_TARGET=electron next build && npx esbuild electron/src/main.ts electron/src/preload.ts --bundle=false --platform=node --outdir=electron --format=cjs && electron .",
+  "electron:build": "BUILD_TARGET=electron next build && npx esbuild electron/src/main.ts electron/src/preload.ts --bundle=false --platform=node --outdir=electron --format=cjs && electron-builder"
+},
   "dependencies": {
+    "@stripe/stripe-js": "^8.8.0",
+    "@supabase/supabase-js": "^2.98.0",
     "@xyflow/react": "^12.10.1",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "stripe": "^20.4.0",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
@@ -53,5 +56,4 @@
       "target": "AppImage"
     }
   }
-  
 }

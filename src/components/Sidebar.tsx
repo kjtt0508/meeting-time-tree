@@ -8,9 +8,13 @@ import { v4 as uuidv4 } from "uuid";
 
 interface Props {
   projects: Project[];
+  plan: "free" | "pro";
   onAddProject: (project: Project) => void;
   onAddMeeting: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
+  onLogout: () => void;
+  onUpgrade: () => void;
+  onCancel: () => void;
 }
 
 const PRESET_COLORS = [
@@ -18,7 +22,7 @@ const PRESET_COLORS = [
   "#EF4444", "#8B5CF6", "#EC4899",
 ];
 
-export default function Sidebar({ projects, onAddProject, onAddMeeting, onDeleteProject }: Props) {
+export default function Sidebar({ projects, plan, onAddProject, onAddMeeting, onDeleteProject, onLogout, onUpgrade, onCancel }: Props) {
   const [newName, setNewName] = useState("");
   const [selColor, setSelColor] = useState(PRESET_COLORS[0]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -29,7 +33,7 @@ export default function Sidebar({ projects, onAddProject, onAddMeeting, onDelete
       id: uuidv4(),
       name: newName.trim(),
       color: selColor,
-      sortOrder: projects.length,
+      sortOrder: projects.length === 0 ? 0 : Math.max(...projects.map((p) => p.sortOrder)) + 1,
       createdDate: new Date().toISOString().slice(0, 10),
     });
     setNewName("");
@@ -48,6 +52,11 @@ export default function Sidebar({ projects, onAddProject, onAddMeeting, onDelete
     <aside className="w-64 bg-gray-900 text-white flex flex-col h-full">
       <div className="px-4 py-5 border-b border-gray-700">
         <h1 className="text-lg font-bold tracking-wide">Meeting Timetree</h1>
+        <span className={`text-xs px-2 py-0.5 rounded-full mt-1 inline-block ${
+          plan === "pro" ? "bg-yellow-500 text-black" : "bg-gray-700 text-gray-300"
+        }`}>
+          {plan === "pro" ? "✦ Pro" : "Free"}
+        </span>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
@@ -111,6 +120,27 @@ export default function Sidebar({ projects, onAddProject, onAddMeeting, onDelete
           className="w-full bg-blue-500 hover:bg-blue-600 rounded-lg py-2 text-sm font-medium"
         >
           追加
+        </button>
+        {plan === "free" ? (
+          <button
+            onClick={onUpgrade}
+            className="w-full bg-yellow-500 hover:bg-yellow-400 text-black rounded-lg py-2 text-sm font-medium"
+          >
+            ✦ Proにアップグレード
+          </button>
+        ) : (
+          <button
+            onClick={onCancel}
+            className="w-full text-red-400 hover:text-red-300 bg-gray-800 hover:bg-gray-700 rounded-lg py-2 text-sm transition-colors"
+          >
+            サブスクリプションを解約
+          </button>
+        )}
+        <button
+          onClick={onLogout}
+          className="w-full text-gray-400 hover:text-white text-xs py-1"
+        >
+          ログアウト
         </button>
       </div>
     </aside>
