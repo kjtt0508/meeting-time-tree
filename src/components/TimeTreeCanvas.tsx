@@ -36,6 +36,10 @@ import {
   updateMeeting,
   deleteMeeting,
   deleteProject,
+  fetchEdges,
+  insertEdge,
+  deleteEdge,
+  deleteEdgesByMeetingId,
 } from "@/lib/db";
 import { supabase } from "@/lib/supabase";
 import MeetingNode from "./MeetingNode";
@@ -116,14 +120,22 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
   // 初回データ取得
   useEffect(() => {
     (async () => {
-      const [pjs, mtgs, userPlan] = await Promise.all([
+      const [pjs, mtgs, userPlan, savedEdges] = await Promise.all([
         fetchProjects(userId),
         fetchMeetings(userId),
         fetchPlan(userId),
+        fetchEdges(userId),
       ]);
       setProjects(pjs);
       setMeetings(mtgs);
       setPlan(userPlan);
+      setExtraEdges(savedEdges.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        animated: true,
+        style: { stroke: "#94A3B8", strokeWidth: 2, strokeDasharray: "6 3" },
+      })));
       setLoading(false);
     })();
   }, [userId]);
@@ -140,6 +152,8 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
       });
     }
   }, [userId]);
+
+  const [extraEdges, setExtraEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   const handleOpenDetail = useCallback((nodeId: string) => {
     setMeetings((prev) => {
@@ -214,14 +228,13 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
     return edges;
   }, [projects, meetings]);
 
-  const [extraEdges, setExtraEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const edges: Edge[] = useMemo(
     () => [...derivedEdges, ...extraEdges],
     [derivedEdges, extraEdges]
   );
 
   const onConnect = useCallback(
-    (params: Connection) => {
+    async (params: Connection) => {
       const newEdge: Edge = {
         id: `e-custom-${params.source}-${params.target}-${Date.now()}`,
         source: params.source ?? "",
@@ -232,8 +245,9 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
         style: { stroke: "#94A3B8", strokeWidth: 2, strokeDasharray: "6 3" },
       };
       setExtraEdges((eds) => [...eds, newEdge]);
+      await insertEdge(userId, { id: newEdge.id, source: newEdge.source, target: newEdge.target });
     },
-    [setExtraEdges]
+    [setExtraEdges, userId]
   );
 
   // ---- ハンドラ ----
@@ -256,7 +270,10 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
     setMeetings((prev) => prev.filter((m) => m.projectId !== projectId));
     setNodes((nds) => nds.filter((n) => n.id !== `header-${projectId}` && !deletedIds.has(n.id)));
     setExtraEdges((eds) => eds.filter((e: Edge) => !deletedIds.has(e.source) && !deletedIds.has(e.target)));
-    await deleteProject(projectId); // DBはcascadeで会議も削除される
+    await deleteProject(projectId);
+    for (const id of deletedIds) {
+      await deleteEdgesByMeetingId(id);
+    }
   }, [setNodes, setExtraEdges]);
 
   const handleAddMeeting = useCallback(async (projectId: string) => {
@@ -303,6 +320,7 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
     setExtraEdges((eds) => eds.filter((e: Edge) => e.source !== id && e.target !== id));
     setModalOpen(false);
     await deleteMeeting(id);
+    await deleteEdgesByMeetingId(id);
   }, [setNodes, setExtraEdges]);
 
   const handleLogout = useCallback(async () => {

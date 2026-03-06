@@ -106,3 +106,42 @@ export async function fetchPlan(userId: string): Promise<"free" | "pro"> {
   if (error) return "free";
   return data.plan as "free" | "pro";
 }
+
+// ---- Edges ----
+
+export async function fetchEdges(userId: string): Promise<{ id: string; source: string; target: string }[]> {
+  const { data, error } = await supabase
+    .from("edges")
+    .select("*")
+    .eq("user_id", userId);
+
+  if (error) throw error;
+  return data.map((row) => ({
+    id: row.id,
+    source: row.source,
+    target: row.target,
+  }));
+}
+
+export async function insertEdge(userId: string, edge: { id: string; source: string; target: string }): Promise<void> {
+  const { error } = await supabase.from("edges").insert({
+    id: edge.id,
+    user_id: userId,
+    source: edge.source,
+    target: edge.target,
+  });
+  if (error) throw error;
+}
+
+export async function deleteEdge(edgeId: string): Promise<void> {
+  const { error } = await supabase.from("edges").delete().eq("id", edgeId);
+  if (error) throw error;
+}
+
+export async function deleteEdgesByMeetingId(meetingId: string): Promise<void> {
+  const { error } = await supabase
+    .from("edges")
+    .delete()
+    .or(`source.eq.${meetingId},target.eq.${meetingId}`);
+  if (error) throw error;
+}
