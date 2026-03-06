@@ -280,9 +280,22 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
 
   const handleSaveMeeting = useCallback(async (updated: Meeting) => {
     setMeetings((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+    // 会議日が変わった場合はノードのY座標をリセット（posMapを上書き）
+    setNodes((nds) => nds.map((n) => {
+      if (n.id !== updated.id) return n;
+      const pj = projects.find((p) => p.id === updated.projectId);
+      if (!pj) return n;
+      return {
+        ...n,
+        position: {
+          x: n.position.x,
+          y: dateToY(updated.meetingDate, ABSOLUTE_ORIGIN),
+        },
+      };
+    }));
     setModalOpen(false);
     await updateMeeting(updated);
-  }, []);
+  }, [projects, setNodes]);
 
   const handleDeleteMeeting = useCallback(async (id: string) => {
     setMeetings((prev) => prev.filter((m) => m.id !== id));
@@ -297,9 +310,7 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
   }, []);
 
   const handleCancel = useCallback(async () => {
-    const confirmed = window.confirm(
-      "サブスクリプションを解約しますか？\n現在の期間終了後にFreeプランに戻ります。"
-    );
+    const confirmed = window.confirm("サブスクリプションを解約しますか？\n現在の期間終了後にFreeプランに戻ります。");
     if (!confirmed) return;
 
     const { data: { session } } = await supabase.auth.getSession();
