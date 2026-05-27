@@ -233,6 +233,14 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
     [derivedEdges, extraEdges]
   );
 
+  const onEdgesDelete = useCallback(async (deletedEdges: Edge[]) => {
+    for (const edge of deletedEdges) {
+      if (edge.id.startsWith("e-custom-")) {
+        await deleteEdge(edge.id);
+      }
+    }
+  }, []);
+
   const onConnect = useCallback(
     async (params: Connection) => {
       const newEdge: Edge = {
@@ -394,6 +402,8 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onEdgesDelete={onEdgesDelete}
+          deleteKeyCode={["Backspace", "Delete"]}
           nodeTypes={nodeTypes}
           connectOnClick={false}
           defaultEdgeOptions={{ type: "smoothstep" }}

@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 import TimeTreeCanvas from "@/components/TimeTreeCanvas";
-import AuthScreen from "@/components/AuthScreen";
+import LandingPage from "@/components/LandingPage";
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -36,7 +36,7 @@ export default function Home() {
   }
 
   if (!user) {
-    return <AuthScreen />;
+    return <LandingPage />;
   }
 
   return <TimeTreeCanvas />;

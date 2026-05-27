@@ -35,15 +35,10 @@ export async function POST(req: NextRequest) {
     }
 
     // 期末で解約（即時解約ではなく次回更新時にキャンセル）
+    // DB更新はStripe Webhookの customer.subscription.deleted 受信時に行う
     await stripe.subscriptions.update(subscriptions.data[0].id, {
       cancel_at_period_end: true,
     });
-
-    // DBのプランをfreeに更新
-    await supabaseAdmin
-      .from("profiles")
-      .update({ plan: "free" })
-      .eq("id", userId);
 
     return NextResponse.json({ success: true });
   } catch (err) {

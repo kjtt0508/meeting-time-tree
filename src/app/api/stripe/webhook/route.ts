@@ -11,26 +11,28 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-function getUserId(event: Stripe.Event): string | null {
+async function getUserId(event: Stripe.Event): Promise<string | null> {
   const obj = event.data.object;
 
-  // checkout.session.completed
   if (event.type === "checkout.session.completed") {
     const session = obj as Stripe.Checkout.Session;
     return session.metadata?.supabase_user_id ?? null;
   }
 
-  // invoice.payment_succeeded / invoice.payment_failed
   if (event.type === "invoice.payment_succeeded" || event.type === "invoice.payment_failed") {
     const invoice = obj as Stripe.Invoice;
-    // invoice の subscription から metadata を取得
-    return (invoice as unknown as Record<string, unknown>)
-      ?.subscription_details
-      ? null // subscription_details経由は複雑なのでcheckout時のみ対応
-      : null;
+    const customerId = typeof invoice.customer === "string"
+      ? invoice.customer
+      : (invoice.customer as Stripe.Customer | null)?.id;
+    if (!customerId) return null;
+    try {
+      const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer;
+      return customer.metadata?.supabase_user_id ?? null;
+    } catch {
+      return null;
+    }
   }
 
-  // customer.subscription.deleted
   if (event.type === "customer.subscription.deleted") {
     const subscription = obj as Stripe.Subscription;
     return subscription.metadata?.supabase_user_id ?? null;
@@ -61,7 +63,7 @@ export async function POST(req: NextRequest) {
 
   console.log(`Received event: ${event.type}`);
 
-  const userId = getUserId(event);
+  const userId = await getUserId(event);
   console.log(`userId: ${userId}`);
 
   if (!userId) {

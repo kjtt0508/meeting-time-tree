@@ -37,8 +37,8 @@
     "typescript": "^5"
   },
   "build": {
-    "appId": "com.yourname.timetree",
-    "productName": "Meeting Timetree",
+    "appId": "com.kajiwara.meeting-timetree",
+    "productName": "Meeting Time Tree",
     "directories": {
       "output": "dist"
     },

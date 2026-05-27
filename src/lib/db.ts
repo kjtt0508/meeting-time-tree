@@ -36,6 +36,12 @@ export async function insertProject(userId: string, project: Project): Promise<v
 }
 
 export async function deleteProject(projectId: string): Promise<void> {
+  const { error: meetingsError } = await supabase
+    .from("meetings")
+    .delete()
+    .eq("project_id", projectId);
+  if (meetingsError) throw meetingsError;
+
   const { error } = await supabase.from("projects").delete().eq("id", projectId);
   if (error) throw error;
 }
