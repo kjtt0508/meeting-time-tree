@@ -431,16 +431,14 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
     }
   }, []);
 
-  const handleUpgrade = useCallback(async () => {
+  const handleUpgrade = useCallback(async (targetPlan: "pro" | "team" = "pro") => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     try {
-      const pendingPlan = sessionStorage.getItem("pendingPlan") as "pro" | "team" | null;
-      sessionStorage.removeItem("pendingPlan");
       const res = await fetch("/api/ls/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: session.user.id, email: session.user.email, plan: pendingPlan ?? "pro" }),
+        body: JSON.stringify({ userId: session.user.id, email: session.user.email, plan: targetPlan }),
       });
       if (!res.ok) throw new Error("checkout failed");
       const { url } = await res.json();
@@ -449,6 +447,16 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
       alert("決済ページを開けませんでした。もう一度お試しください。");
     }
   }, []);
+
+  // LP経由でpendingPlanが保存されている場合、ログイン後に自動的に決済画面を開く
+  useEffect(() => {
+    if (loading || plan !== "free") return;
+    const pendingPlan = sessionStorage.getItem("pendingPlan") as "pro" | "team" | null;
+    if (pendingPlan === "pro" || pendingPlan === "team") {
+      sessionStorage.removeItem("pendingPlan");
+      handleUpgrade(pendingPlan);
+    }
+  }, [loading, plan, handleUpgrade]);
 
   const handleBuyOnce = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession();

@@ -14,7 +14,7 @@ interface Props {
   onAddMeeting: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
   onLogout: () => void;
-  onUpgrade: () => void;
+  onUpgrade: (plan: "pro" | "team") => void;
   onBuyOnce: () => void;
   onCancel: () => void;
   onExport: () => void;
@@ -145,10 +145,16 @@ export default function Sidebar({ projects, plan, isSubscription, onAddProject, 
         {plan === "free" ? (
           <>
             <button
-              onClick={onUpgrade}
+              onClick={() => onUpgrade("pro")}
               className="w-full bg-yellow-500 hover:bg-yellow-400 text-black rounded-lg py-2 text-sm font-medium"
             >
-              ✦ Proにアップグレード
+              ✦ Proにアップグレード（¥980/月）
+            </button>
+            <button
+              onClick={() => onUpgrade("team")}
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white rounded-lg py-2 text-sm font-medium"
+            >
+              ✦ Teamプラン（¥2,980/月・5人）
             </button>
             <button
               onClick={onBuyOnce}
