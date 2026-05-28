@@ -171,7 +171,9 @@
 2. **`STRIPE_ONE_TIME_PRICE_ID` 作成・設定**（Stripe ダッシュボード → Vercel env add）
 3. ~~**Supabase 外部キー CASCADE 制約追加**~~ ✅ 完了（edges/meetings に ON DELETE CASCADE 設定済み）
 4. **Supabase RLS ポリシー本番確認**
-4. **OGP画像作成**（`public/og-image.png`）
+4. ~~**OGP画像作成**~~ ✅ 完了（`src/app/opengraph-image.tsx` で動的生成 + Twitter Card メタタグ追加）
+4.5 ~~**利用規約・プライバシーポリシー・特定商取引法表記**~~ ✅ 完了（`/terms`, `/privacy`, `/tokusho`）
+    - **残作業**: `/tokusho` の `[要記入]` 箇所（事業者名・住所・電話番号）を実際の情報で記入
 5. **Zenn/note 記事投稿 → Product Hunt 申請**
 6. **GitHub Releases で Electron 版を配布**
 7. ~~**D-13 チームメンバー招待機能の実装**~~ ✅ 完了
