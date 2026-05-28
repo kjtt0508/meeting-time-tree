@@ -14,8 +14,9 @@
 - @xyflow/react（ノードベースのビジュアル接続）
 - Electron（デスクトップアプリ対応）
 - Supabase（認証・DB）
-- Stripe（決済）
+- **Lemon Squeezy（決済 — Merchant of Record モデルで税務・VAT 対応）**
 - Tailwind CSS v4
+- html-to-image（PNGエクスポート）
 
 ## チーム体制
 
@@ -47,7 +48,7 @@
 **役割**: 販売プラットフォーム・価格設定・決済フロー
 **使うスキル/ツール**: run, verify, WebSearch
 **主なタスク**:
-- Stripe決済フローの確認・改善
+- Lemon Squeezy 決済フローの確認・改善
 - Webアプリ販売ページの設計
 - 将来のApp Store申請準備
 
@@ -73,15 +74,16 @@
 - **フェーズ**: LP公開 → Zenn記事投稿 → Product Hunt申請の順に実施
 
 ### ②販売プラットフォーム
-- **メイン**: Stripe直販（現状実装を活かす）
+- **メイン**: Lemon Squeezy（Merchant of Record — 税務・VAT・返金対応をLSが代行）
 - **配布方法**: GitHub Releases + electron-builder（手数料0%・最速）
 - **App Store申請**: 将来フェーズ（初回リリース後に検討）
-- **Webアプリ版**: Vercelデプロイ（Stripeウェブフック受信のため必須）
+- **Webアプリ版**: Vercelデプロイ（LS Webhook受信のため必須）
+- **移行経緯**: 当初 Stripe 直販で実装→税務/法務負担削減のため 2026-05-28 に Lemon Squeezy へ移行
 
 ### ③対象デバイス
 - **フェーズ1（今）**: Webアプリ版（Vercel）を先行リリース
 - **フェーズ2**: Electronデスクトップ版（Windows/Mac）をGitHub Releasesで配布
-- **補足**: ElectronはStripe APIルートと静的エクスポートが競合するため、決済処理はWebアプリ経由に統一する
+- **補足**: Electron は API ルートと静的エクスポートが競合するため、決済処理は Web アプリ経由に統一する
 
 ### ④販売優位性
 - 競合（Miro $8/人、Notion $10/人、Confluence $5.75/人）に対して低価格かつ日本語特化
@@ -117,68 +119,74 @@
 
 ---
 
-## 優先タスクリスト（2026-05-28 更新）
+## 実装完了済み機能（2026-05-29 時点）
 
-### A. リリースブロッカー — ✅ 全完了
+### コア機能
+- ✅ プロジェクト作成・削除（カスケード削除済み）
+- ✅ 議事録カード追加・編集・削除
+- ✅ カード間のエッジ接続・削除UI（`deleteKeyCode` + `onEdgesDelete`）
+- ✅ ノード位置の永続化（`meetings.pos_x`/`pos_y` + `onNodeDragStop`）
+- ✅ PNG エクスポート（html-to-image、Pro/Team のみ）
 
-1. ~~**`cancel/route.ts` の解約バグ修正**~~ ✅ 完了
-2. ~~**`webhook/route.ts` の `invoice.payment_succeeded` バグ修正**~~ ✅ 完了
-3. ~~**`deleteProject` のカスケード削除漏れ修正**~~ ✅ 完了
-4. ~~**カスタムエッジの削除UIを接続**~~ ✅ 完了（`deleteKeyCode` + `onEdgesDelete` 追加）
+### 決済（Lemon Squeezy）
+- ✅ チェックアウトフロー（`/api/ls/checkout`）
+- ✅ Webhook（`/api/ls/webhook`） — `variant_id` ベースでプラン判定
+- ✅ サブスク解約（`/api/ls/cancel`） — 期末解約
+- ✅ 買い切り対応（プロフィールに `ls_subscription_id` を保存しないことで解約ボタン非表示）
+- ✅ Free/Pro/Team の3ボタン UI（サイドバー）
 
-### B. デプロイ前設定 — ✅ ほぼ完了
+### チーム機能
+- ✅ Team プラン購入で `teams` レコード自動作成 + オーナー登録
+- ✅ チーム情報の救済 API（`/api/team/ensure`） — 過去のバグで `teams` 行未作成のユーザーを冪等救済
+- ✅ メンバー招待（`/api/team/invite` + `/verify` + `/accept` + Bearer 認証 + メール一致チェック）
+- ✅ TeamSettingsModal（招待リンク生成・メンバー一覧・削除・保留中招待管理）
 
-5. ~~`layout.tsx` のタイトル変更~~ ✅ "Meeting Time Tree" に変更済み
-6. ~~`NEXT_PUBLIC_APP_URL` を本番URLに変更~~ ✅ `https://meeting-timetree.vercel.app` に設定済み
-7. **Stripe キーを本番キー (`sk_live_`) に差し替え** — 未対応（現在テストキー）
-8. **Supabase RLS ポリシーを本番環境で確認・適用** — 未対応
-9. ~~`electron-builder` の `appId` を正式名称に変更~~ ✅ `com.kajiwara.meeting-timetree` に変更済み
+### 法令・LP
+- ✅ ランディングページ（`src/components/LandingPage.tsx`）
+- ✅ OGP動的生成（`src/app/opengraph-image.tsx`） + Twitter Card メタタグ
+- ✅ 利用規約（`/terms`）・プライバシーポリシー（`/privacy`）・特定商取引法表記（`/tokusho`）
 
-### C. リリース前必須 — ✅ ほぼ完了
-
-10. ~~**ランディングページ作成**~~ ✅ `src/components/LandingPage.tsx` 実装済み
-11. **OGP画像作成** (`public/og-image.png`) — 未対応（SNS・Product Hunt 申請に必須）
-
-### D. リリース後の機能追加 — 実装/設計完了
-
-12. ~~**PNG エクスポート機能**~~ ✅ 実装完了（html2canvas、Proのみ有効）
-13. ~~**チームメンバー招待機能**~~ ✅ 実装完了
-    - Supabase: `teams` / `team_members` / `team_invitations` テーブル作成済み（RLS 設定済み）
-    - API: `/api/team/invite` / `/api/team/invite/verify` / `/api/team/invite/accept` / `/api/team/members`
-    - UI: `TeamSettingsModal.tsx` / `src/app/invite/page.tsx`
-    - セキュリティ: Bearer トークン認証 + 招待メールアドレス一致チェック（IDOR 対策）
-14. **Electron オフライン対応強化** — 設計書完成（実装 Phase 1〜2 で 3〜5日）
-    - dexie.js（IndexedDB）でオフラインキャッシュ推奨
-    - Optimistic Update + Sync Queue で Supabase と同期
-    - Stripe は `NEXT_PUBLIC_API_URL` + deep link で対応
-15. ~~**買い切りライセンス発行フロー**~~ ✅ 実装完了（`/api/stripe/one-time`、Sidebar に紫ボタン追加）
-    - **残作業**: Stripe ダッシュボードで Price 作成 → `STRIPE_ONE_TIME_PRICE_ID` を Vercel 環境変数に追加
+### インフラ
+- ✅ Supabase: edges/meetings に `ON DELETE CASCADE` 設定済み
+- ✅ Supabase RLS: teams/team_members/team_invitations に適用済み（本番環境での最終確認は残）
+- ✅ Vercel 本番デプロイ（`https://meeting-timetree.vercel.app`）
+- ✅ electron-builder appId `com.kajiwara.meeting-timetree` 設定済み
 
 ---
 
-## デプロイ状況（2026-05-28）
+## デプロイ状況（2026-05-29）
 
 - **本番URL**: https://meeting-timetree.vercel.app
 - **GitHub**: https://github.com/kjtt0508/meeting-time-tree
-- **Stripe Webhook**: `we_1TblSSGtgsBuZW0N7FUV8Q4c`（本番エンドポイント登録済み）
-- **Vercel 環境変数**: 8変数設定済み（`STRIPE_ONE_TIME_PRICE_ID` のみ未設定）
+- **決済**: Lemon Squeezy（テストモード — 本番モードへの切り替えが残作業）
+- **LS Webhook**: 本番エンドポイント `https://meeting-timetree.vercel.app/api/ls/webhook` を LS テストモードで登録済み
+- **Vercel 環境変数（設定済み）**:
+  - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY`
+  - `LEMONSQUEEZY_API_KEY` / `LEMONSQUEEZY_STORE_ID` / `LEMONSQUEEZY_WEBHOOK_SECRET`
+  - `LEMONSQUEEZY_PRO_MONTHLY_VARIANT_ID` (1716502)
+  - `LEMONSQUEEZY_TEAM_MONTHLY_VARIANT_ID` (1716458)
+  - `LEMONSQUEEZY_ONE_TIME_VARIANT_ID` (1716493)
+  - `NEXT_PUBLIC_APP_URL`
 
 ---
 
-## 残タスク（優先順）
+## 残タスク（優先順 — 2026-05-29 時点）
 
-1. ~~**Stripe 本番キーへの切り替え**~~ → **Lemon Squeezy に移行済み（不要）**
-2. ~~**`STRIPE_ONE_TIME_PRICE_ID` 作成・設定**~~ → **Lemon Squeezy に移行済み（不要）**
-2.5 **Lemon Squeezy 本番モードへの切り替え** — テストモードで確認後、本番APIキーに差し替え
-3. ~~**Supabase 外部キー CASCADE 制約追加**~~ ✅ 完了（edges/meetings に ON DELETE CASCADE 設定済み）
-4. **Supabase RLS ポリシー本番確認**
-4. ~~**OGP画像作成**~~ ✅ 完了（`src/app/opengraph-image.tsx` で動的生成 + Twitter Card メタタグ追加）
-4.5 ~~**利用規約・プライバシーポリシー・特定商取引法表記**~~ ✅ 完了（`/terms`, `/privacy`, `/tokusho`）
-    - **残作業**: `/tokusho` の `[要記入]` 箇所（事業者名・住所・電話番号）を実際の情報で記入
+> 詳細な「次回着手タスク」は本ドキュメント末尾の「セッションログ（2026-05-29）」セクションを参照。
+
+1. **【最優先】チーム招待の自己招待エラー対応** — 「This invitation is for a different email address」の改善
+2. **Lemon Squeezy 本番モードへの切り替え** — 本番APIキー・WebhookSecret・Variant IDの差し替え
+3. **`/tokusho` の `[要記入]` 箇所** — 事業者名・住所・電話番号の記入
+4. **Supabase RLS ポリシー本番確認** — 一通り作成済みだが、本番環境で動作確認
 5. **Zenn/note 記事投稿 → Product Hunt 申請**
 6. **GitHub Releases で Electron 版を配布**
-7. ~~**D-13 チームメンバー招待機能の実装**~~ ✅ 完了
-8. **D-14 Electron オフライン対応の実装**（設計書あり）
+7. **D-14 Electron オフライン対応の実装**（設計書あり — dexie.js + Optimistic Update + Sync Queue）
+
+### Electron オフライン対応 設計サマリ
+- dexie.js（IndexedDB）でローカルキャッシュ
+- Optimistic Update + Sync Queue で Supabase と同期
+- 決済は `NEXT_PUBLIC_API_URL`（Webアプリ）+ deep link で対応
+- Phase 1〜2 で実装規模 3〜5日
 
 ---
 
