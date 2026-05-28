@@ -44,6 +44,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invitation has expired" }, { status: 400 });
     }
 
+    // 招待メールアドレスと受諾ユーザーのメールアドレスが一致するか確認
+    const inviteeEmail = (user.email ?? "").trim().toLowerCase();
+    const expectedEmail = (invitation.email ?? "").trim().toLowerCase();
+    if (!inviteeEmail || inviteeEmail !== expectedEmail) {
+      return NextResponse.json(
+        { error: "This invitation is for a different email address" },
+        { status: 403 }
+      );
+    }
+
     const teamId: string = invitation.team_id;
 
     // 重複メンバーチェック
