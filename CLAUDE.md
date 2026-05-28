@@ -142,10 +142,11 @@
 ### D. リリース後の機能追加 — 実装/設計完了
 
 12. ~~**PNG エクスポート機能**~~ ✅ 実装完了（html2canvas、Proのみ有効）
-13. **チームメンバー招待機能** — 設計書完成（実装 Phase 1〜2 で 7〜10日）
-    - Supabase: `teams` / `team_members` / `team_invitations` テーブル追加
-    - Resend API でメール送信
-    - SQL DDL・RLS・フロー設計済み
+13. ~~**チームメンバー招待機能**~~ ✅ 実装完了
+    - Supabase: `teams` / `team_members` / `team_invitations` テーブル作成済み（RLS 設定済み）
+    - API: `/api/team/invite` / `/api/team/invite/verify` / `/api/team/invite/accept` / `/api/team/members`
+    - UI: `TeamSettingsModal.tsx` / `src/app/invite/page.tsx`
+    - セキュリティ: Bearer トークン認証 + 招待メールアドレス一致チェック（IDOR 対策）
 14. **Electron オフライン対応強化** — 設計書完成（実装 Phase 1〜2 で 3〜5日）
     - dexie.js（IndexedDB）でオフラインキャッシュ推奨
     - Optimistic Update + Sync Queue で Supabase と同期
@@ -173,7 +174,7 @@
 4. **OGP画像作成**（`public/og-image.png`）
 5. **Zenn/note 記事投稿 → Product Hunt 申請**
 6. **GitHub Releases で Electron 版を配布**
-7. **D-13 チームメンバー招待機能の実装**（設計書あり）
+7. ~~**D-13 チームメンバー招待機能の実装**~~ ✅ 完了
 8. **D-14 Electron オフライン対応の実装**（設計書あり）
 
 ---
