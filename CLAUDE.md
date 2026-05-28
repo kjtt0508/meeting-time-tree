@@ -168,7 +168,8 @@
 
 1. **Stripe 本番キーへの切り替え**（`sk_live_` / `pk_live_`）— 課金開始に必須
 2. **`STRIPE_ONE_TIME_PRICE_ID` 作成・設定**（Stripe ダッシュボード → Vercel env add）
-3. **Supabase RLS ポリシー本番確認**
+3. ~~**Supabase 外部キー CASCADE 制約追加**~~ ✅ 完了（edges/meetings に ON DELETE CASCADE 設定済み）
+4. **Supabase RLS ポリシー本番確認**
 4. **OGP画像作成**（`public/og-image.png`）
 5. **Zenn/note 記事投稿 → Product Hunt 申請**
 6. **GitHub Releases で Electron 版を配布**

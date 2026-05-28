@@ -2,7 +2,7 @@
 // Supabase との CRUD 操作をまとめたデータアクセス層
 
 import { supabase } from "./supabase";
-import { Project, Meeting } from "@/types";
+import { Project, Meeting, Plan } from "@/types";
 
 // ---- Projects ----
 
@@ -102,7 +102,7 @@ export async function deleteMeeting(meetingId: string): Promise<void> {
 
 // ---- Plan ----
 
-export async function fetchPlan(userId: string): Promise<"free" | "pro"> {
+export async function fetchPlan(userId: string): Promise<Plan> {
   const { data, error } = await supabase
     .from("profiles")
     .select("plan")
@@ -110,7 +110,7 @@ export async function fetchPlan(userId: string): Promise<"free" | "pro"> {
     .single();
 
   if (error) return "free";
-  return data.plan as "free" | "pro";
+  return data.plan as Plan;
 }
 
 // ---- Edges ----

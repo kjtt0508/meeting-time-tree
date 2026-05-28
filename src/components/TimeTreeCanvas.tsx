@@ -20,7 +20,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { Project, Meeting } from "@/types";
+import { Plan, Project, Meeting, Team } from "@/types";
 import {
   dateToY,
   projectToX,
@@ -42,9 +42,11 @@ import {
   deleteEdge,
   deleteEdgesByMeetingId,
 } from "@/lib/db";
+import { fetchMyTeam } from "@/lib/team";
 import { supabase } from "@/lib/supabase";
 import MeetingNode from "./MeetingNode";
 import MeetingDetailModal from "./MeetingDetailModal";
+import TeamSettingsModal from "./TeamSettingsModal";
 import Sidebar from "./Sidebar";
 import TimelineRuler from "./TimelineRuler";
 import { v4 as uuidv4 } from "uuid";
@@ -108,10 +110,12 @@ function buildMeetingNode(
 function TimeTreeCanvasInner({ userId }: { userId: string }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
-  const [plan, setPlan] = useState<"free" | "pro">("free");
+  const [plan, setPlan] = useState<Plan>("free");
+  const [team, setTeam] = useState<Team | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [teamModalOpen, setTeamModalOpen] = useState(false);
 
   const meetingsRef = useRef(meetings);
   useEffect(() => { meetingsRef.current = meetings; }, [meetings]);
@@ -121,15 +125,17 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
   // 初回データ取得
   useEffect(() => {
     (async () => {
-      const [pjs, mtgs, userPlan, savedEdges] = await Promise.all([
+      const [pjs, mtgs, userPlan, savedEdges, myTeam] = await Promise.all([
         fetchProjects(userId),
         fetchMeetings(userId),
         fetchPlan(userId),
         fetchEdges(userId),
+        fetchMyTeam(userId),
       ]);
       setProjects(pjs);
       setMeetings(mtgs);
       setPlan(userPlan);
+      setTeam(myTeam);
       setExtraEdges(savedEdges.map((e) => ({
         id: e.id,
         source: e.source,
@@ -146,9 +152,9 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("upgraded") === "true") {
-      fetchPlan(userId).then((newPlan) => {
+      Promise.all([fetchPlan(userId), fetchMyTeam(userId)]).then(([newPlan, myTeam]) => {
         setPlan(newPlan);
-        // クエリパラメータを消す
+        setTeam(myTeam);
         window.history.replaceState({}, "", "/");
       });
     }
@@ -263,7 +269,7 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
 
   const handleAddProject = useCallback(async (project: Project) => {
     // 無料プランは3個まで
-    if (plan === "free" && projects.length >= FREE_PLAN_PROJECT_LIMIT) {
+    if (plan !== "pro" && plan !== "team" && projects.length >= FREE_PLAN_PROJECT_LIMIT) {
       alert(`無料プランはプロジェクトを${FREE_PLAN_PROJECT_LIMIT}個まで作成できます。\nProプランにアップグレードすると無制限になります。`);
       return;
     }
@@ -290,7 +296,7 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
   const handleAddMeeting = useCallback(async (projectId: string) => {
     const pj = projects.find((p) => p.id === projectId);
     if (!pj) return;
-    if (plan === "free") {
+    if (plan !== "pro" && plan !== "team") {
       const projectMeetings = meetings.filter((m) => m.projectId === projectId);
       if (projectMeetings.length >= FREE_PLAN_NODE_LIMIT) {
         alert(`無料プランは1プロジェクトあたり${FREE_PLAN_NODE_LIMIT}件まで会議を追加できます。\nProプランにアップグレードすると無制限になります。`);
@@ -311,7 +317,7 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
     setSelectedMeeting(newMeeting);
     setModalOpen(true);
     await insertMeeting(userId, newMeeting);
-  }, [projects, userId]);
+  }, [plan, projects, meetings, userId]);
 
   const handleSaveMeeting = useCallback(async (updated: Meeting) => {
     setMeetings((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
@@ -342,7 +348,7 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
   }, [setNodes, setExtraEdges]);
 
   const handleExport = useCallback(async () => {
-    if (plan !== "pro") {
+    if (plan !== "pro" && plan !== "team") {
       alert("Proプランにアップグレードが必要です。");
       return;
     }
@@ -430,6 +436,10 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
     }
   }, []);
 
+  const handleTeamSettings = useCallback(() => {
+    setTeamModalOpen(true);
+  }, []);
+
   if (loading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-gray-900">
@@ -451,6 +461,7 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
         onBuyOnce={handleBuyOnce}
         onCancel={handleCancel}
         onExport={handleExport}
+        onTeamSettings={handleTeamSettings}
       />
 
       <div className="flex-1 relative">
@@ -486,6 +497,13 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
         onClose={() => setModalOpen(false)}
         onSave={handleSaveMeeting}
         onDelete={handleDeleteMeeting}
+      />
+
+      <TeamSettingsModal
+        isOpen={teamModalOpen}
+        onClose={() => setTeamModalOpen(false)}
+        team={team}
+        userId={userId}
       />
     </div>
   );

@@ -303,7 +303,12 @@ export default function LandingPage() {
                 ))}
               </ul>
               <button
-                onClick={() => setShowAuth(true)}
+                onClick={() => {
+                  if (plan.name === "Team") {
+                    sessionStorage.setItem("pendingPlan", "team");
+                  }
+                  setShowAuth(true);
+                }}
                 className={`w-full py-3 rounded-xl font-semibold text-sm transition ${
                   plan.highlight
                     ? "bg-blue-600 hover:bg-blue-500 text-white"

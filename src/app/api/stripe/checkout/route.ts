@@ -7,7 +7,11 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId, email } = await req.json();
+    const { userId, email, plan = "pro" } = await req.json() as {
+      userId: string;
+      email: string;
+      plan?: "pro" | "team";
+    };
 
     // Stripe Customer を作成（または既存のものを取得）
     const customers = await stripe.customers.list({ email, limit: 1 });
@@ -28,20 +32,29 @@ export async function POST(req: NextRequest) {
       customerId = customer.id;
     }
 
+    // plan に応じた price ID を選択
+    const priceId =
+      plan === "team"
+        ? process.env.STRIPE_TEAM_PRICE_ID!
+        : process.env.STRIPE_PRICE_ID!;
+
     // チェックアウトセッション作成
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       payment_method_types: ["card"],
       line_items: [
         {
-          price: process.env.STRIPE_PRICE_ID!,
+          price: priceId,
           quantity: 1,
         },
       ],
       mode: "subscription",
       success_url: `${process.env.NEXT_PUBLIC_APP_URL}?upgraded=true`,
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}?upgraded=false`,
-      metadata: { supabase_user_id: userId },
+      metadata: {
+        supabase_user_id: userId,
+        type: plan === "team" ? "team" : "pro",
+      },
     });
 
     return NextResponse.json({ url: session.url });

@@ -3,12 +3,12 @@
 "use client";
 
 import React, { useState } from "react";
-import { Project } from "@/types";
+import { Plan, Project } from "@/types";
 import { v4 as uuidv4 } from "uuid";
 
 interface Props {
   projects: Project[];
-  plan: "free" | "pro";
+  plan: Plan;
   onAddProject: (project: Project) => void;
   onAddMeeting: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
@@ -17,6 +17,7 @@ interface Props {
   onBuyOnce: () => void;
   onCancel: () => void;
   onExport: () => void;
+  onTeamSettings: () => void;
 }
 
 const PRESET_COLORS = [
@@ -24,7 +25,7 @@ const PRESET_COLORS = [
   "#EF4444", "#8B5CF6", "#EC4899",
 ];
 
-export default function Sidebar({ projects, plan, onAddProject, onAddMeeting, onDeleteProject, onLogout, onUpgrade, onBuyOnce, onCancel, onExport }: Props) {
+export default function Sidebar({ projects, plan, onAddProject, onAddMeeting, onDeleteProject, onLogout, onUpgrade, onBuyOnce, onCancel, onExport, onTeamSettings }: Props) {
   const [newName, setNewName] = useState("");
   const [selColor, setSelColor] = useState(PRESET_COLORS[0]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -56,18 +57,22 @@ export default function Sidebar({ projects, plan, onAddProject, onAddMeeting, on
         <h1 className="text-lg font-bold tracking-wide">Meeting Timetree</h1>
         <div className="flex items-center justify-between mt-1">
           <span className={`text-xs px-2 py-0.5 rounded-full inline-block ${
-            plan === "pro" ? "bg-yellow-500 text-black" : "bg-gray-700 text-gray-300"
+            plan === "team"
+              ? "bg-blue-600 text-white"
+              : plan === "pro"
+              ? "bg-yellow-500 text-black"
+              : "bg-gray-700 text-gray-300"
           }`}>
-            {plan === "pro" ? "✦ Pro" : "Free"}
+            {plan === "team" ? "✦ Team" : plan === "pro" ? "✦ Pro" : "Free"}
           </span>
           <button
             onClick={onExport}
             className={`text-xs px-2 py-0.5 rounded-full inline-flex items-center gap-1 transition-colors ${
-              plan === "pro"
+              plan === "pro" || plan === "team"
                 ? "bg-gray-700 hover:bg-gray-600 text-gray-200"
                 : "bg-gray-800 text-gray-500 cursor-pointer"
             }`}
-            title={plan === "pro" ? "PNGとしてエクスポート" : "Proプランでご利用可能"}
+            title={plan === "pro" || plan === "team" ? "PNGとしてエクスポート" : "Proプランでご利用可能"}
           >
             ↓ エクスポート
           </button>
@@ -151,6 +156,13 @@ export default function Sidebar({ projects, plan, onAddProject, onAddMeeting, on
               買い切り ¥3,980（永久ライセンス）
             </button>
           </>
+        ) : plan === "team" ? (
+          <button
+            onClick={onTeamSettings}
+            className="w-full bg-blue-600 hover:bg-blue-500 text-white rounded-lg py-2 text-sm font-medium transition-colors"
+          >
+            チームを管理
+          </button>
         ) : (
           <button
             onClick={onCancel}
