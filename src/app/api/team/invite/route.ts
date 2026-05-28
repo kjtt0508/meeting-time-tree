@@ -69,7 +69,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Failed to retrieve invitation token" }, { status: 500 });
     }
 
-    const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/invite?token=${inviteData.token}`;
+    const appUrl = stripBOM(process.env.NEXT_PUBLIC_APP_URL ?? "https://meeting-timetree.vercel.app");
+    const inviteUrl = `${appUrl}/invite?token=${inviteData.token}`;
     return NextResponse.json({ inviteUrl });
   } catch (err) {
     console.error("invite POST error:", err);
