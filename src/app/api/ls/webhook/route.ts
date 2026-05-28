@@ -21,6 +21,31 @@ function verifySignature(rawBody: string, signature: string): boolean {
   }
 }
 
+type PurchasedPlan = "pro" | "team" | "one_time" | "unknown";
+
+function resolvePlanFromVariant(variantId: string | number | null | undefined): PurchasedPlan {
+  if (variantId == null) return "unknown";
+  const v = String(variantId);
+  const proId = stripBOM(process.env.LEMONSQUEEZY_PRO_MONTHLY_VARIANT_ID ?? "");
+  const teamId = stripBOM(process.env.LEMONSQUEEZY_TEAM_MONTHLY_VARIANT_ID ?? "");
+  const oneTimeId = stripBOM(process.env.LEMONSQUEEZY_ONE_TIME_VARIANT_ID ?? "");
+
+  if (v === proId) return "pro";
+  if (v === teamId) return "team";
+  if (v === oneTimeId) return "one_time";
+  return "unknown";
+}
+
+function extractVariantId(event: { data: { attributes: Record<string, unknown> } }): string | null {
+  const attrs = event.data.attributes;
+  // subscription_*: attributes.variant_id
+  if (attrs.variant_id != null) return String(attrs.variant_id);
+  // order_created: attributes.first_order_item.variant_id
+  const firstItem = attrs.first_order_item as { variant_id?: string | number } | undefined;
+  if (firstItem?.variant_id != null) return String(firstItem.variant_id);
+  return null;
+}
+
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   const signature = req.headers.get("x-signature") ?? "";
@@ -33,9 +58,10 @@ export async function POST(req: NextRequest) {
   const eventName: string = event.meta?.event_name ?? "";
   const customData = event.meta?.custom_data ?? {};
   const userId: string | undefined = customData.user_id;
-  const type: string = customData.type ?? "pro"; // "pro" | "team" | "one_time"
+  const variantId = extractVariantId(event);
+  const purchasedPlan = resolvePlanFromVariant(variantId);
 
-  console.log(`LS event: ${eventName}, userId: ${userId}, type: ${type}`);
+  console.log(`LS event: ${eventName}, userId: ${userId}, variantId: ${variantId}, resolvedPlan: ${purchasedPlan}`);
 
   if (!userId) {
     return NextResponse.json({ received: true });
@@ -61,12 +87,16 @@ export async function POST(req: NextRequest) {
   }
 
   switch (eventName) {
-    // ─── 一括購入 ─────────────────────────────────────────────
+    // ─── 一括購入（買い切り）─ order_createdはone_time購入時のみplan更新 ─────
     case "order_created": {
-      if (event.data.attributes.status === "paid") {
+      if (event.data.attributes.status !== "paid") break;
+      // 買い切り(one_time)の場合のみここでpro付与。サブスク系はsubscription_createdで処理する
+      if (purchasedPlan === "one_time") {
         const { error: e } = await supabaseAdmin.from("profiles").update({ plan: "pro" }).eq("id", userId);
-        if (e) console.error("[order_created] update error - code:", e.code, "msg:", e.message, "userId:", userId);
-        else console.log("[order_created] plan→pro userId:", userId);
+        if (e) console.error("[order_created] one_time update error - code:", e.code, "msg:", e.message, "userId:", userId);
+        else console.log("[order_created] one_time → plan:pro userId:", userId);
+      } else {
+        console.log("[order_created] skipped (will be handled by subscription_created) plan:", purchasedPlan);
       }
       break;
     }
@@ -76,9 +106,9 @@ export async function POST(req: NextRequest) {
       const subscriptionId: string = event.data.id;
       const userEmail: string = event.data.attributes.user_email ?? "";
 
-      console.log("[subscription_created] userId:", userId, "subscriptionId:", subscriptionId, "type:", type);
+      console.log("[subscription_created] userId:", userId, "subscriptionId:", subscriptionId, "plan:", purchasedPlan);
 
-      if (type === "team") {
+      if (purchasedPlan === "team") {
         const teamName = (userEmail.split("@")[0] ?? userId) + "のチーム";
 
         const { data: teamData, error: teamError } = await supabaseAdmin
@@ -99,22 +129,31 @@ export async function POST(req: NextRequest) {
           .eq("id", userId);
         if (teamUpdateError) console.error("[subscription_created] team profile update error - code:", teamUpdateError.code, "msg:", teamUpdateError.message);
         else console.log("[subscription_created] plan→team userId:", userId);
-      } else {
+      } else if (purchasedPlan === "pro") {
         const { error: proUpdateError } = await supabaseAdmin.from("profiles")
           .update({ plan: "pro", ls_subscription_id: subscriptionId })
           .eq("id", userId);
         if (proUpdateError) console.error("[subscription_created] pro update error - code:", proUpdateError.code, "msg:", proUpdateError.message, "userId:", userId);
         else console.log("[subscription_created] plan→pro userId:", userId);
+      } else {
+        console.warn("[subscription_created] unknown variant - skipping profile update. variantId:", variantId);
       }
       break;
     }
 
     // ─── 更新成功（期間継続） ──────────────────────────────────
     case "subscription_payment_success": {
-      if (profileCheck?.plan !== "team") {
+      // 既存のplanを維持（team→team, pro→pro）。variant_idで判定して期間延長扱い
+      if (purchasedPlan === "team") {
+        const { error: e } = await supabaseAdmin.from("profiles").update({ plan: "team" }).eq("id", userId);
+        if (e) console.error("[subscription_payment_success] team update error - code:", e.code, "msg:", e.message);
+        else console.log("[subscription_payment_success] plan→team userId:", userId);
+      } else if (purchasedPlan === "pro") {
         const { error: e } = await supabaseAdmin.from("profiles").update({ plan: "pro" }).eq("id", userId);
-        if (e) console.error("[subscription_payment_success] update error - code:", e.code, "msg:", e.message);
+        if (e) console.error("[subscription_payment_success] pro update error - code:", e.code, "msg:", e.message);
         else console.log("[subscription_payment_success] plan→pro userId:", userId);
+      } else {
+        console.log("[subscription_payment_success] unknown variant, no update. variantId:", variantId);
       }
       break;
     }
