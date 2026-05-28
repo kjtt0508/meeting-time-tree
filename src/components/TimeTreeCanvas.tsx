@@ -386,13 +386,12 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
 
-    const res = await fetch("/api/stripe/cancel", {
+    const res = await fetch("/api/ls/cancel", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId: session.user.id,
-        email: session.user.email,
-      }),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
     });
 
     if (res.ok) {
@@ -406,10 +405,12 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     try {
-      const res = await fetch("/api/stripe/checkout", {
+      const pendingPlan = sessionStorage.getItem("pendingPlan") as "pro" | "team" | null;
+      sessionStorage.removeItem("pendingPlan");
+      const res = await fetch("/api/ls/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: session.user.id, email: session.user.email }),
+        body: JSON.stringify({ userId: session.user.id, email: session.user.email, plan: pendingPlan ?? "pro" }),
       });
       if (!res.ok) throw new Error("checkout failed");
       const { url } = await res.json();
@@ -423,10 +424,10 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     try {
-      const res = await fetch("/api/stripe/one-time", {
+      const res = await fetch("/api/ls/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: session.user.id, email: session.user.email }),
+        body: JSON.stringify({ userId: session.user.id, email: session.user.email, plan: "one_time" }),
       });
       if (!res.ok) throw new Error("checkout failed");
       const { url } = await res.json();
