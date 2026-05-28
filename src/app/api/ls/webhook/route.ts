@@ -4,9 +4,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
+const stripBOM = (s: string) => s.replace(/^﻿/, "").trim();
+
 const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  stripBOM(process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""),
+  stripBOM(process.env.SUPABASE_SERVICE_ROLE_KEY ?? "")
 );
 
 function verifySignature(rawBody: string, signature: string): boolean {
@@ -39,13 +41,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ received: true });
   }
 
+  // admin接続テスト + profilesレコード確認
+  const { data: profileCheck, error: profileCheckErr } = await supabaseAdmin
+    .from("profiles")
+    .select("id, plan")
+    .eq("id", userId)
+    .single();
+
+  if (profileCheckErr) {
+    console.error("[webhook] profiles SELECT error - code:", profileCheckErr.code, "msg:", profileCheckErr.message, "userId:", userId);
+  } else {
+    console.log("[webhook] profiles SELECT ok - userId:", userId, "currentPlan:", profileCheck?.plan);
+  }
+
+  if (profileCheckErr?.code === "PGRST116" || !profileCheck) {
+    // profilesレコードが存在しない → upsertで作成
+    await supabaseAdmin.from("profiles").upsert({ id: userId, plan: "free" }, { onConflict: "id" });
+    console.log("[webhook] profiles upserted for userId:", userId);
+  }
+
   switch (eventName) {
     // ─── 一括購入 ─────────────────────────────────────────────
     case "order_created": {
       if (event.data.attributes.status === "paid") {
         const { error: e } = await supabaseAdmin.from("profiles").update({ plan: "pro" }).eq("id", userId);
-        if (e) console.error("order_created update error:", JSON.stringify(e), "userId:", userId);
-        else console.log("order_created: plan→pro userId:", userId);
+        if (e) console.error("[order_created] update error - code:", e.code, "msg:", e.message, "userId:", userId);
+        else console.log("[order_created] plan→pro userId:", userId);
       }
       break;
     }
@@ -55,7 +76,7 @@ export async function POST(req: NextRequest) {
       const subscriptionId: string = event.data.id;
       const userEmail: string = event.data.attributes.user_email ?? "";
 
-      console.log("subscription_created: userId:", userId, "subscriptionId:", subscriptionId, "type:", type);
+      console.log("[subscription_created] userId:", userId, "subscriptionId:", subscriptionId, "type:", type);
 
       if (type === "team") {
         const teamName = (userEmail.split("@")[0] ?? userId) + "のチーム";
@@ -67,7 +88,7 @@ export async function POST(req: NextRequest) {
           .single();
 
         if (teamError || !teamData) {
-          console.error("Failed to create team:", JSON.stringify(teamError));
+          console.error("[subscription_created] team create error - code:", teamError?.code, "msg:", teamError?.message);
           break;
         }
 
@@ -76,26 +97,24 @@ export async function POST(req: NextRequest) {
         const { error: teamUpdateError } = await supabaseAdmin.from("profiles")
           .update({ plan: "team", team_id: teamId, ls_subscription_id: subscriptionId })
           .eq("id", userId);
-        if (teamUpdateError) console.error("team profile update error:", JSON.stringify(teamUpdateError));
-        else console.log("subscription_created: plan→team userId:", userId);
+        if (teamUpdateError) console.error("[subscription_created] team profile update error - code:", teamUpdateError.code, "msg:", teamUpdateError.message);
+        else console.log("[subscription_created] plan→team userId:", userId);
       } else {
         const { error: proUpdateError } = await supabaseAdmin.from("profiles")
           .update({ plan: "pro", ls_subscription_id: subscriptionId })
           .eq("id", userId);
-        if (proUpdateError) console.error("pro profile update error:", JSON.stringify(proUpdateError), "userId:", userId);
-        else console.log("subscription_created: plan→pro userId:", userId);
+        if (proUpdateError) console.error("[subscription_created] pro update error - code:", proUpdateError.code, "msg:", proUpdateError.message, "userId:", userId);
+        else console.log("[subscription_created] plan→pro userId:", userId);
       }
       break;
     }
 
     // ─── 更新成功（期間継続） ──────────────────────────────────
     case "subscription_payment_success": {
-      const { data: profile } = await supabaseAdmin
-        .from("profiles").select("plan").eq("id", userId).single();
-      if (profile?.plan !== "team") {
+      if (profileCheck?.plan !== "team") {
         const { error: e } = await supabaseAdmin.from("profiles").update({ plan: "pro" }).eq("id", userId);
-        if (e) console.error("subscription_payment_success update error:", JSON.stringify(e));
-        else console.log("subscription_payment_success: plan→pro userId:", userId);
+        if (e) console.error("[subscription_payment_success] update error - code:", e.code, "msg:", e.message);
+        else console.log("[subscription_payment_success] plan→pro userId:", userId);
       }
       break;
     }
