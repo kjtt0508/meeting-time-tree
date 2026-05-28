@@ -285,9 +285,18 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
     }
   }, [setNodes, setExtraEdges]);
 
+  const FREE_PLAN_NODE_LIMIT = 20;
+
   const handleAddMeeting = useCallback(async (projectId: string) => {
     const pj = projects.find((p) => p.id === projectId);
     if (!pj) return;
+    if (plan === "free") {
+      const projectMeetings = meetings.filter((m) => m.projectId === projectId);
+      if (projectMeetings.length >= FREE_PLAN_NODE_LIMIT) {
+        alert(`無料プランは1プロジェクトあたり${FREE_PLAN_NODE_LIMIT}件まで会議を追加できます。\nProプランにアップグレードすると無制限になります。`);
+        return;
+      }
+    }
     const today = new Date().toISOString().slice(0, 10);
     const newMeeting: Meeting = {
       id: uuidv4(),
@@ -337,7 +346,7 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
       alert("Proプランにアップグレードが必要です。");
       return;
     }
-    const target = document.querySelector<HTMLElement>(".react-flow__renderer");
+    const target = document.querySelector<HTMLElement>(".react-flow__viewport");
     if (!target) {
       alert("キャンバスの取得に失敗しました。");
       return;
@@ -381,8 +390,7 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
     });
 
     if (res.ok) {
-      setPlan("free");
-      alert("解約しました。現在の期間終了後にFreeプランに移行します。");
+      alert("解約予約が完了しました。現在の期間終了後にFreeプランに移行します。");
     } else {
       alert("解約に失敗しました。もう一度お試しください。");
     }
@@ -391,31 +399,35 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
   const handleUpgrade = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
-    const res = await fetch("/api/stripe/checkout", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId: session.user.id,
-        email: session.user.email,
-      }),
-    });
-    const { url } = await res.json();
-    if (url) window.open(url, "_blank");
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: session.user.id, email: session.user.email }),
+      });
+      if (!res.ok) throw new Error("checkout failed");
+      const { url } = await res.json();
+      if (url) window.open(url, "_blank");
+    } catch {
+      alert("決済ページを開けませんでした。もう一度お試しください。");
+    }
   }, []);
 
   const handleBuyOnce = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
-    const res = await fetch("/api/stripe/one-time", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId: session.user.id,
-        email: session.user.email,
-      }),
-    });
-    const { url } = await res.json();
-    if (url) window.open(url, "_blank");
+    try {
+      const res = await fetch("/api/stripe/one-time", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: session.user.id, email: session.user.email }),
+      });
+      if (!res.ok) throw new Error("checkout failed");
+      const { url } = await res.json();
+      if (url) window.open(url, "_blank");
+    } catch {
+      alert("決済ページを開けませんでした。もう一度お試しください。");
+    }
   }, []);
 
   if (loading) {

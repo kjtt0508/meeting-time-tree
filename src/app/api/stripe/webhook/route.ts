@@ -35,7 +35,16 @@ async function getUserId(event: Stripe.Event): Promise<string | null> {
 
   if (event.type === "customer.subscription.deleted") {
     const subscription = obj as Stripe.Subscription;
-    return subscription.metadata?.supabase_user_id ?? null;
+    const customerId = typeof subscription.customer === "string"
+      ? subscription.customer
+      : (subscription.customer as Stripe.Customer | null)?.id;
+    if (!customerId) return null;
+    try {
+      const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer;
+      return customer.metadata?.supabase_user_id ?? null;
+    } catch {
+      return null;
+    }
   }
 
   return null;

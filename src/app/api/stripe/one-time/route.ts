@@ -2,15 +2,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
-import { createClient } from "@supabase/supabase-js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-
-// サービスロールキーで Supabase に接続（サーバーサイドのみ）
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,6 +15,11 @@ export async function POST(req: NextRequest) {
 
     if (customers.data.length > 0) {
       customerId = customers.data[0].id;
+      // webhook での userId 取得のため metadata を確実に設定
+      const existing = customers.data[0];
+      if (!existing.metadata?.supabase_user_id) {
+        await stripe.customers.update(customerId, { metadata: { supabase_user_id: userId } });
+      }
     } else {
       const customer = await stripe.customers.create({
         email,
