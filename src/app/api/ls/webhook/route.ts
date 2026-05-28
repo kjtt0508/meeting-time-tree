@@ -43,7 +43,9 @@ export async function POST(req: NextRequest) {
     // ─── 一括購入 ─────────────────────────────────────────────
     case "order_created": {
       if (event.data.attributes.status === "paid") {
-        await supabaseAdmin.from("profiles").update({ plan: "pro" }).eq("id", userId);
+        const { error: e } = await supabaseAdmin.from("profiles").update({ plan: "pro" }).eq("id", userId);
+        if (e) console.error("order_created update error:", JSON.stringify(e), "userId:", userId);
+        else console.log("order_created: plan→pro userId:", userId);
       }
       break;
     }
@@ -52,6 +54,8 @@ export async function POST(req: NextRequest) {
     case "subscription_created": {
       const subscriptionId: string = event.data.id;
       const userEmail: string = event.data.attributes.user_email ?? "";
+
+      console.log("subscription_created: userId:", userId, "subscriptionId:", subscriptionId, "type:", type);
 
       if (type === "team") {
         const teamName = (userEmail.split("@")[0] ?? userId) + "のチーム";
@@ -69,13 +73,17 @@ export async function POST(req: NextRequest) {
 
         const teamId: string = teamData.id;
         await supabaseAdmin.from("team_members").insert({ team_id: teamId, user_id: userId, role: "owner" });
-        await supabaseAdmin.from("profiles")
+        const { error: teamUpdateError } = await supabaseAdmin.from("profiles")
           .update({ plan: "team", team_id: teamId, ls_subscription_id: subscriptionId })
           .eq("id", userId);
+        if (teamUpdateError) console.error("team profile update error:", JSON.stringify(teamUpdateError));
+        else console.log("subscription_created: plan→team userId:", userId);
       } else {
-        await supabaseAdmin.from("profiles")
+        const { error: proUpdateError } = await supabaseAdmin.from("profiles")
           .update({ plan: "pro", ls_subscription_id: subscriptionId })
           .eq("id", userId);
+        if (proUpdateError) console.error("pro profile update error:", JSON.stringify(proUpdateError), "userId:", userId);
+        else console.log("subscription_created: plan→pro userId:", userId);
       }
       break;
     }
@@ -85,7 +93,9 @@ export async function POST(req: NextRequest) {
       const { data: profile } = await supabaseAdmin
         .from("profiles").select("plan").eq("id", userId).single();
       if (profile?.plan !== "team") {
-        await supabaseAdmin.from("profiles").update({ plan: "pro" }).eq("id", userId);
+        const { error: e } = await supabaseAdmin.from("profiles").update({ plan: "pro" }).eq("id", userId);
+        if (e) console.error("subscription_payment_success update error:", JSON.stringify(e));
+        else console.log("subscription_payment_success: plan→pro userId:", userId);
       }
       break;
     }

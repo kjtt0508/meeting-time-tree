@@ -147,17 +147,29 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
     })();
   }, [userId]);
 
-  // upgraded=true のクエリパラメータがある場合はプランを再取得
+  // upgraded=true のクエリパラメータがある場合: webhookが届くまでポーリングしてプランを再取得
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
-    if (params.get("upgraded") === "true") {
-      Promise.all([fetchPlan(userId), fetchMyTeam(userId)]).then(([newPlan, myTeam]) => {
+    if (params.get("upgraded") !== "true") return;
+
+    window.history.replaceState({}, "", "/");
+
+    let attempts = 0;
+    const MAX_ATTEMPTS = 15; // 最大30秒 (2秒 × 15回)
+
+    const poll = async () => {
+      const [newPlan, myTeam] = await Promise.all([fetchPlan(userId), fetchMyTeam(userId)]);
+      if (newPlan !== "free" || attempts >= MAX_ATTEMPTS) {
         setPlan(newPlan);
         setTeam(myTeam);
-        window.history.replaceState({}, "", "/");
-      });
-    }
+        return;
+      }
+      attempts++;
+      setTimeout(poll, 2000);
+    };
+
+    poll();
   }, [userId]);
 
   const [extraEdges, setExtraEdges, onEdgesChange] = useEdgesState<Edge>([]);
