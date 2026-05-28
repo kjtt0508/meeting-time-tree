@@ -196,3 +196,80 @@
 ## 権限設定
 
 `.claude/settings.json` にてファイル編集・git・PowerShell操作の許可確認を省略済み。
+
+---
+
+## セッションログ（2026-05-29）
+
+### 解決済みの問題
+
+| # | 問題 | 原因 | 対応 |
+|---|---|---|---|
+| 1 | Proプラン購入後にfreeのまま | webhook遅延 + Supabase update silent fail | 2秒×15回ポーリング + エラーログ追加 + profile upsertフォールバック（`src/app/api/ls/webhook/route.ts`） |
+| 2 | 解約ボタンが401エラー | `SUPABASE_SERVICE_ROLE_KEY` の BOM 文字 | `stripBOM()` を全LS/teamルートに適用 |
+| 3 | 買い切りなのに「解約」ボタン表示 | `plan==="pro"` だけで判定していた | `fetchPlanInfo()` 追加 → `isSubscription`（=`ls_subscription_id`の有無）で判定 |
+| 4 | エクスポートボタンが失敗 | html2canvas が ReactFlow の CSS transform 非対応 | `html-to-image` に置き換え + `getNodesBounds`/`getViewportForBounds` で1920×1080フィット |
+| 5 | サイドバーに Team プラン購入ボタンが無い | 設計漏れ | サイドバーに青Teamボタン追加 + `handleUpgrade(plan)` 引数化 |
+| 6 | どのボタン押してもLS購入画面が同じ | LSは1商品内のバリエーション選択方式 | webhook で `custom_data.type` ではなく `variant_id` から判定（`LEMONSQUEEZY_*_VARIANT_ID` 比較） |
+| 7 | 「チームを管理」ボタンが無反応 | 過去バグで `teams` レコード未作成 → モーダルが `team===null` で return null | `/api/team/ensure` 救済API を新設、ボタン押下時に冪等作成 |
+| 8 | 招待リンクにアクセスできない | URL生成時に `NEXT_PUBLIC_APP_URL` の BOM が混入 | `stripBOM()` 適用（`src/app/api/team/invite/route.ts:72`） |
+| 9 | ノード位置が保存されない | meetings に pos_x/pos_y 未保存 | カラム追加 + `updateMeetingPosition()` + `onNodeDragStop` |
+| 10 | 初期ズームが小さすぎ | `DEFAULT_ZOOM = 0.12` | `0.5` に変更 |
+
+### 追加した Supabase スキーマ変更
+- `ALTER TABLE meetings ADD COLUMN pos_x REAL, ADD COLUMN pos_y REAL;`（ノード位置保存用）
+
+### Lemon Squeezy 環境変数（テストモード）
+- `LEMONSQUEEZY_PRO_MONTHLY_VARIANT_ID` = `1716502`（¥980）
+- `LEMONSQUEEZY_TEAM_MONTHLY_VARIANT_ID` = `1716458`（¥2,980）
+- `LEMONSQUEEZY_ONE_TIME_VARIANT_ID` = `1716493`（¥3,980）
+
+---
+
+## 🚧 次回着手タスク（優先順）
+
+### 1. **【最優先】チーム招待の自己招待エラー対応**
+**症状**: 招待ページで「This invitation is for a different email address」エラー
+
+**原因**: `/api/team/invite/accept/route.ts:48-55` — 招待メールアドレスと受諾ユーザーのメールアドレスが一致しないと 403 を返す（IDOR対策）。オーナーが自分自身を招待した、または別のメールアドレスでログイン中の場合に発生。
+
+**修正方針候補**:
+- (a) オーナーが自分自身を招待した場合は許可する（同一userIdなら即チームメンバーに追加）
+- (b) 招待生成時に既存メンバー/オーナーへの招待を拒否する
+- (c) エラーメッセージを日本語化して原因を明示（「この招待は別のメールアドレス宛です。送信先と同じアカウントでログインしてください」）
+
+→ (a) + (c) の組み合わせ推奨。
+
+**関連ファイル**:
+- `src/app/api/team/invite/accept/route.ts:48-55`（メール一致チェック）
+- `src/app/api/team/invite/route.ts`（招待生成 — 自分宛拒否の事前チェック追加）
+- `src/app/invite/page.tsx`（エラー表示の日本語化）
+
+### 2. Lemon Squeezy 本番モードへの切り替え
+- 本番APIキー発行 → Vercel 環境変数 `LEMONSQUEEZY_API_KEY` 差し替え
+- Webhook URL を本番モードで再登録 → `LEMONSQUEEZY_WEBHOOK_SECRET` 更新
+- 本番モードの Variant ID で `LEMONSQUEEZY_*_VARIANT_ID` を上書き
+
+### 3. `/tokusho`（特定商取引法表記）の `[要記入]` 箇所を実情報で埋める
+事業者名・住所・電話番号
+
+### 4. Supabase RLS ポリシー本番確認
+
+### 5. Zenn/note 記事投稿 → Product Hunt 申請
+
+### 6. Electron 版を GitHub Releases で配布
+
+### 7. D-14 Electron オフライン対応の実装（設計書あり）
+
+---
+
+## 🐛 既知の繰り返しパターン
+
+**Windows UTF-8 BOM 汚染**: Vercel 環境変数を Windows 上でテキスト編集すると先頭に `﻿` が付くことがある。新しく `process.env.FOO` を fetch ヘッダー / URL / Supabase client に渡すコードを追加する際は、必ず `stripBOM()` を経由する。
+
+```ts
+const stripBOM = (s: string) => s.replace(/^﻿/, "").trim();
+```
+
+適用済み箇所: `src/lib/supabase.ts`, `src/app/layout.tsx`, `src/app/api/ls/{checkout,webhook,cancel}/route.ts`, `src/app/api/team/{invite,invite/verify,invite/accept,members,ensure}/route.ts`
+
