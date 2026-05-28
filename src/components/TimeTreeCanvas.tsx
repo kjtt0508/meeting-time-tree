@@ -475,9 +475,31 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
     }
   }, []);
 
-  const handleTeamSettings = useCallback(() => {
-    setTeamModalOpen(true);
-  }, []);
+  const handleTeamSettings = useCallback(async () => {
+    if (team) {
+      setTeamModalOpen(true);
+      return;
+    }
+    // teamが未取得 or 未作成 → ensure APIで作成/取得
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    try {
+      const res = await fetch("/api/team/ensure", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: "" }));
+        alert(error || "チーム情報の取得に失敗しました。");
+        return;
+      }
+      const { team: ensuredTeam } = await res.json();
+      setTeam(ensuredTeam);
+      setTeamModalOpen(true);
+    } catch {
+      alert("チーム情報の取得に失敗しました。もう一度お試しください。");
+    }
+  }, [team]);
 
   const handleNodeDragStop = useCallback((_: React.MouseEvent, node: Node) => {
     if (node.id.startsWith("header-")) return;
