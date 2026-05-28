@@ -337,8 +337,19 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="py-8 px-6 border-t border-slate-800 text-center text-slate-500 text-sm">
-        <p>© 2026 Meeting Time Tree · <button onClick={() => setShowAuth(true)} className="hover:text-slate-300 transition">ログイン</button></p>
+      <footer className="py-10 px-6 border-t border-slate-800 text-slate-500 text-sm">
+        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+          <p>© 2026 Meeting Time Tree</p>
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            <button onClick={() => setShowAuth(true)} className="hover:text-slate-300 transition">
+              ログイン
+            </button>
+            <a href="/terms" className="hover:text-slate-300 transition">利用規約</a>
+            <a href="/privacy" className="hover:text-slate-300 transition">プライバシーポリシー</a>
+            <a href="/tokusho" className="hover:text-slate-300 transition">特定商取引法に基づく表記</a>
+            <a href="mailto:scandal.what.is.your.standard@gmail.com" className="hover:text-slate-300 transition">お問い合わせ</a>
+          </div>
+        </div>
       </footer>
     </div>
   );
