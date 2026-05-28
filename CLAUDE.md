@@ -117,48 +117,63 @@
 
 ---
 
-## 優先タスクリスト
+## 優先タスクリスト（2026-05-28 更新）
 
-### A. リリースブロッカー（即日対応・担当: ②プログラミング）
+### A. リリースブロッカー — ✅ 全完了
 
-1. **[緊急] `cancel/route.ts` の解約バグ修正**
-   - 問題: 期末解約なのに即座に `plan=free` に変更され、課金期間中にPro機能が剥奪される
-   - 修正: Stripe の `cancel_at_period_end=true` のセット後、DB更新はWebhookの `customer.subscription.deleted` 受信時のみ行う
+1. ~~**`cancel/route.ts` の解約バグ修正**~~ ✅ 完了
+2. ~~**`webhook/route.ts` の `invoice.payment_succeeded` バグ修正**~~ ✅ 完了
+3. ~~**`deleteProject` のカスケード削除漏れ修正**~~ ✅ 完了
+4. ~~**カスタムエッジの削除UIを接続**~~ ✅ 完了（`deleteKeyCode` + `onEdgesDelete` 追加）
 
-2. **[緊急] `webhook/route.ts` の `invoice.payment_succeeded` バグ修正**
-   - 問題: `getUserId` が `return null` になりサブスク更新時にPro反映されない
-   - 修正: `subscription` オブジェクトの `customer` フィールドからユーザーIDを取得するよう修正
+### B. デプロイ前設定 — ✅ ほぼ完了
 
-3. **[緊急] `deleteProject` のカスケード削除漏れ修正**
-   - 問題: プロジェクト削除時に紐づく `meetings` レコードがDB上に残る
-   - 修正: `deleteProject` 内で `meetings` テーブルを先に削除するか、Supabase の外部キー制約でカスケード削除を設定
+5. ~~`layout.tsx` のタイトル変更~~ ✅ "Meeting Time Tree" に変更済み
+6. ~~`NEXT_PUBLIC_APP_URL` を本番URLに変更~~ ✅ `https://meeting-timetree.vercel.app` に設定済み
+7. **Stripe キーを本番キー (`sk_live_`) に差し替え** — 未対応（現在テストキー）
+8. **Supabase RLS ポリシーを本番環境で確認・適用** — 未対応
+9. ~~`electron-builder` の `appId` を正式名称に変更~~ ✅ `com.kajiwara.meeting-timetree` に変更済み
 
-4. **[緊急] カスタムエッジの削除UIを接続**
-   - 問題: 削除関数は実装済みだが、UIに接続されていない
-   - 修正: エッジのコンテキストメニューまたはクリックイベントに削除関数を紐付ける
+### C. リリース前必須 — ✅ ほぼ完了
 
-### B. デプロイ前設定（リリース前必須・担当: ②プログラミング + ③統括）
+10. ~~**ランディングページ作成**~~ ✅ `src/components/LandingPage.tsx` 実装済み
+11. **OGP画像作成** (`public/og-image.png`) — 未対応（SNS・Product Hunt 申請に必須）
 
-5. `layout.tsx` のタイトルを "Create Next App" から "Meeting Time Tree" に変更
-6. `NEXT_PUBLIC_APP_URL` を `localhost:3000` から本番URLに変更（Vercelデプロイ後に確定）
-7. Stripe キーを本番キー (`sk_live_`) に差し替え
-8. Supabase RLS ポリシーを本番環境で確認・適用
-9. `electron-builder` の `appId` を `"com.yourname.timetree"` から正式名称に変更（例: `"com.kajiwara.meeting-timetree"`）
+### D. リリース後の機能追加 — 実装/設計完了
 
-### C. リリース前必須（担当: ⑤広報企画）
+12. ~~**PNG エクスポート機能**~~ ✅ 実装完了（html2canvas、Proのみ有効）
+13. **チームメンバー招待機能** — 設計書完成（実装 Phase 1〜2 で 7〜10日）
+    - Supabase: `teams` / `team_members` / `team_invitations` テーブル追加
+    - Resend API でメール送信
+    - SQL DDL・RLS・フロー設計済み
+14. **Electron オフライン対応強化** — 設計書完成（実装 Phase 1〜2 で 3〜5日）
+    - dexie.js（IndexedDB）でオフラインキャッシュ推奨
+    - Optimistic Update + Sync Queue で Supabase と同期
+    - Stripe は `NEXT_PUBLIC_API_URL` + deep link で対応
+15. ~~**買い切りライセンス発行フロー**~~ ✅ 実装完了（`/api/stripe/one-time`、Sidebar に紫ボタン追加）
+    - **残作業**: Stripe ダッシュボードで Price 作成 → `STRIPE_ONE_TIME_PRICE_ID` を Vercel 環境変数に追加
 
-10. **ランディングページ作成** (`src/app/page.tsx` またはルートパスを LP に変更)
-    - 構成: Hero → 課題提示 → ソリューション → スクリーンショット → 料金プラン → フッター
-    - 現状: `/` がアプリ直結になっており LP が存在しない
-11. **OGP画像作成** (`public/og-image.png`)
-    - SNS シェア・Product Hunt 申請に必須
+---
 
-### D. リリース後の機能追加（優先度順・担当: ②プログラミング）
+## デプロイ状況（2026-05-28）
 
-12. PDF/PNG エクスポート機能（Pro 特典として差別化）
-13. チームメンバー招待機能（Team プラン実装）
-14. Electron 版のオフライン対応強化
-15. 買い切りライセンス発行フロー（Stripe の one-time payment 対応）
+- **本番URL**: https://meeting-timetree.vercel.app
+- **GitHub**: https://github.com/kjtt0508/meeting-time-tree
+- **Stripe Webhook**: `we_1TblSSGtgsBuZW0N7FUV8Q4c`（本番エンドポイント登録済み）
+- **Vercel 環境変数**: 8変数設定済み（`STRIPE_ONE_TIME_PRICE_ID` のみ未設定）
+
+---
+
+## 残タスク（優先順）
+
+1. **Stripe 本番キーへの切り替え**（`sk_live_` / `pk_live_`）— 課金開始に必須
+2. **`STRIPE_ONE_TIME_PRICE_ID` 作成・設定**（Stripe ダッシュボード → Vercel env add）
+3. **Supabase RLS ポリシー本番確認**
+4. **OGP画像作成**（`public/og-image.png`）
+5. **Zenn/note 記事投稿 → Product Hunt 申請**
+6. **GitHub Releases で Electron 版を配布**
+7. **D-13 チームメンバー招待機能の実装**（設計書あり）
+8. **D-14 Electron オフライン対応の実装**（設計書あり）
 
 ---
 
@@ -170,17 +185,6 @@
 ~~④販売優位性はあるのか調査~~ → 確定済み（上記「確定事項④」参照）
 ~~⑤無料部分と有料部分の境目は~~ → 確定済み（上記「確定事項⑤」参照）
 ~~⑥買い切りorサブスクなのか~~ → 確定済み（上記「確定事項⑥」参照）
-
----
-
-## 今後の動き（更新版）
-
-1. **A・Bのバグ修正・設定変更**（今日中）
-2. **ランディングページ・OGP作成**（C）
-3. **Vercelデプロイ + Stripe本番設定**
-4. **GitHub Releases でElectron版を配布**
-5. **Zenn/note記事投稿 → Product Hunt申請**
-6. **フィードバックを受けて機能追加**（D）
 
 ---
 
