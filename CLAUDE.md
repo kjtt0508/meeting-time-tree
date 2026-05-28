@@ -167,8 +167,9 @@
 
 ## 残タスク（優先順）
 
-1. **Stripe 本番キーへの切り替え**（`sk_live_` / `pk_live_`）— 課金開始に必須
-2. **`STRIPE_ONE_TIME_PRICE_ID` 作成・設定**（Stripe ダッシュボード → Vercel env add）
+1. ~~**Stripe 本番キーへの切り替え**~~ → **Lemon Squeezy に移行済み（不要）**
+2. ~~**`STRIPE_ONE_TIME_PRICE_ID` 作成・設定**~~ → **Lemon Squeezy に移行済み（不要）**
+2.5 **Lemon Squeezy 本番モードへの切り替え** — テストモードで確認後、本番APIキーに差し替え
 3. ~~**Supabase 外部キー CASCADE 制約追加**~~ ✅ 完了（edges/meetings に ON DELETE CASCADE 設定済み）
 4. **Supabase RLS ポリシー本番確認**
 4. ~~**OGP画像作成**~~ ✅ 完了（`src/app/opengraph-image.tsx` で動的生成 + Twitter Card メタタグ追加）
