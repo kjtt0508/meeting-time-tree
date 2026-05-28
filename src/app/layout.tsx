@@ -12,7 +12,8 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://meeting-timetree.vercel.app";
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://meeting-timetree.vercel.app")
+  .replace(/^﻿/, "").trim();
 
 export const metadata: Metadata = {
   title: "Meeting Time Tree",
