@@ -14,7 +14,9 @@ interface Props {
   onDeleteProject: (projectId: string) => void;
   onLogout: () => void;
   onUpgrade: () => void;
+  onBuyOnce: () => void;
   onCancel: () => void;
+  onExport: () => void;
 }
 
 const PRESET_COLORS = [
@@ -22,7 +24,7 @@ const PRESET_COLORS = [
   "#EF4444", "#8B5CF6", "#EC4899",
 ];
 
-export default function Sidebar({ projects, plan, onAddProject, onAddMeeting, onDeleteProject, onLogout, onUpgrade, onCancel }: Props) {
+export default function Sidebar({ projects, plan, onAddProject, onAddMeeting, onDeleteProject, onLogout, onUpgrade, onBuyOnce, onCancel, onExport }: Props) {
   const [newName, setNewName] = useState("");
   const [selColor, setSelColor] = useState(PRESET_COLORS[0]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -52,11 +54,24 @@ export default function Sidebar({ projects, plan, onAddProject, onAddMeeting, on
     <aside className="w-64 bg-gray-900 text-white flex flex-col h-full">
       <div className="px-4 py-5 border-b border-gray-700">
         <h1 className="text-lg font-bold tracking-wide">Meeting Timetree</h1>
-        <span className={`text-xs px-2 py-0.5 rounded-full mt-1 inline-block ${
-          plan === "pro" ? "bg-yellow-500 text-black" : "bg-gray-700 text-gray-300"
-        }`}>
-          {plan === "pro" ? "✦ Pro" : "Free"}
-        </span>
+        <div className="flex items-center justify-between mt-1">
+          <span className={`text-xs px-2 py-0.5 rounded-full inline-block ${
+            plan === "pro" ? "bg-yellow-500 text-black" : "bg-gray-700 text-gray-300"
+          }`}>
+            {plan === "pro" ? "✦ Pro" : "Free"}
+          </span>
+          <button
+            onClick={onExport}
+            className={`text-xs px-2 py-0.5 rounded-full inline-flex items-center gap-1 transition-colors ${
+              plan === "pro"
+                ? "bg-gray-700 hover:bg-gray-600 text-gray-200"
+                : "bg-gray-800 text-gray-500 cursor-pointer"
+            }`}
+            title={plan === "pro" ? "PNGとしてエクスポート" : "Proプランでご利用可能"}
+          >
+            ↓ エクスポート
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
@@ -122,12 +137,20 @@ export default function Sidebar({ projects, plan, onAddProject, onAddMeeting, on
           追加
         </button>
         {plan === "free" ? (
-          <button
-            onClick={onUpgrade}
-            className="w-full bg-yellow-500 hover:bg-yellow-400 text-black rounded-lg py-2 text-sm font-medium"
-          >
-            ✦ Proにアップグレード
-          </button>
+          <>
+            <button
+              onClick={onUpgrade}
+              className="w-full bg-yellow-500 hover:bg-yellow-400 text-black rounded-lg py-2 text-sm font-medium"
+            >
+              ✦ Proにアップグレード
+            </button>
+            <button
+              onClick={onBuyOnce}
+              className="w-full bg-purple-600 hover:bg-purple-500 text-white rounded-lg py-2 text-sm font-medium"
+            >
+              買い切り ¥3,980（永久ライセンス）
+            </button>
+          </>
         ) : (
           <button
             onClick={onCancel}

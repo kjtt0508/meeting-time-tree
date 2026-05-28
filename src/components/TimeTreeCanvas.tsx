@@ -3,6 +3,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import html2canvas from "html2canvas";
 import {
   ReactFlow,
   Background,
@@ -331,6 +332,34 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
     await deleteEdgesByMeetingId(id);
   }, [setNodes, setExtraEdges]);
 
+  const handleExport = useCallback(async () => {
+    if (plan !== "pro") {
+      alert("Proプランにアップグレードが必要です。");
+      return;
+    }
+    const target = document.querySelector<HTMLElement>(".react-flow__renderer");
+    if (!target) {
+      alert("キャンバスの取得に失敗しました。");
+      return;
+    }
+    try {
+      const canvas = await html2canvas(target, {
+        backgroundColor: "#f1f5f9",
+        scale: 1,
+        useCORS: true,
+        allowTaint: true,
+      });
+      const link = document.createElement("a");
+      const today = new Date().toISOString().slice(0, 10);
+      link.download = `meeting-time-tree-${today}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (e) {
+      console.error("エクスポートに失敗しました:", e);
+      alert("エクスポートに失敗しました。もう一度お試しください。");
+    }
+  }, [plan]);
+
   const handleLogout = useCallback(async () => {
     await supabase.auth.signOut();
   }, []);
@@ -374,6 +403,21 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
     if (url) window.open(url, "_blank");
   }, []);
 
+  const handleBuyOnce = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const res = await fetch("/api/stripe/one-time", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: session.user.id,
+        email: session.user.email,
+      }),
+    });
+    const { url } = await res.json();
+    if (url) window.open(url, "_blank");
+  }, []);
+
   if (loading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-gray-900">
@@ -392,7 +436,9 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
         onDeleteProject={handleDeleteProject}
         onLogout={handleLogout}
         onUpgrade={handleUpgrade}
+        onBuyOnce={handleBuyOnce}
         onCancel={handleCancel}
+        onExport={handleExport}
       />
 
       <div className="flex-1 relative">

@@ -71,9 +71,10 @@ export async function POST(req: NextRequest) {
   }
 
   switch (event.type) {
-    case "checkout.session.completed":
-    case "invoice.payment_succeeded":
-      console.log(`Upgrading user ${userId} to pro`);
+    case "checkout.session.completed": {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const isOneTime = session.metadata?.type === "one_time";
+      console.log(`Upgrading user ${userId} to pro (type: ${isOneTime ? "one_time" : "subscription"})`);
       const { data: updateData, error: updateError } = await supabaseAdmin
         .from("profiles")
         .update({ plan: "pro" })
@@ -81,6 +82,15 @@ export async function POST(req: NextRequest) {
         .select();
       console.log("Update result:", JSON.stringify(updateData));
       console.log("Update error:", JSON.stringify(updateError));
+      break;
+    }
+
+    case "invoice.payment_succeeded":
+      console.log(`Upgrading user ${userId} to pro`);
+      await supabaseAdmin
+        .from("profiles")
+        .update({ plan: "pro" })
+        .eq("id", userId);
       break;
 
     case "customer.subscription.deleted":
