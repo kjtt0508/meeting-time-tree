@@ -35,6 +35,7 @@ import {
   insertProject,
   insertMeeting,
   updateMeeting,
+  updateMeetingPosition,
   deleteMeeting,
   deleteProject,
   fetchEdges,
@@ -54,7 +55,7 @@ import { v4 as uuidv4 } from "uuid";
 const nodeTypes: NodeTypes = { meetingCard: MeetingNode };
 
 const SIDEBAR_WIDTH = 256;
-const DEFAULT_ZOOM = 0.12;
+const DEFAULT_ZOOM = 0.5;
 const ABSOLUTE_ORIGIN = "2020-01-01";
 const FREE_PLAN_PROJECT_LIMIT = 3;
 
@@ -91,8 +92,8 @@ function buildMeetingNode(
     id: m.id,
     type: "meetingCard",
     position: {
-      x: projectToX(project),
-      y: dateToY(m.meetingDate, ABSOLUTE_ORIGIN),
+      x: m.posX ?? projectToX(project),
+      y: m.posY ?? dateToY(m.meetingDate, ABSOLUTE_ORIGIN),
     },
     data: {
       label: m.title,
@@ -453,6 +454,11 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
     setTeamModalOpen(true);
   }, []);
 
+  const handleNodeDragStop = useCallback((_: React.MouseEvent, node: Node) => {
+    if (node.id.startsWith("header-")) return;
+    updateMeetingPosition(node.id, node.position.x, node.position.y);
+  }, []);
+
   if (loading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-gray-900">
@@ -485,6 +491,7 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onEdgesDelete={onEdgesDelete}
+          onNodeDragStop={handleNodeDragStop}
           deleteKeyCode={["Backspace", "Delete"]}
           nodeTypes={nodeTypes}
           connectOnClick={false}

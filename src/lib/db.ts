@@ -64,6 +64,8 @@ export async function fetchMeetings(userId: string): Promise<Meeting[]> {
     decisions: row.decisions,
     nextTasks: row.next_tasks,
     attachmentUrl: row.attachment_url,
+    posX: row.pos_x ?? null,
+    posY: row.pos_y ?? null,
   }));
 }
 
@@ -93,6 +95,10 @@ export async function updateMeeting(meeting: Meeting): Promise<void> {
     })
     .eq("id", meeting.id);
   if (error) throw error;
+}
+
+export async function updateMeetingPosition(meetingId: string, x: number, y: number): Promise<void> {
+  await supabase.from("meetings").update({ pos_x: x, pos_y: y }).eq("id", meetingId);
 }
 
 export async function deleteMeeting(meetingId: string): Promise<void> {

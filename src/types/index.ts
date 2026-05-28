@@ -16,6 +16,8 @@ export interface Meeting {
   decisions: string;
   nextTasks: string;
   attachmentUrl: string;
+  posX?: number | null;
+  posY?: number | null;
 }
 
 export interface MeetingEdge {
