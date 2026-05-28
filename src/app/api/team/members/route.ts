@@ -3,9 +3,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+const stripBOM = (s: string) => s.replace(/^﻿/, "").trim();
 const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  stripBOM(process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""),
+  stripBOM(process.env.SUPABASE_SERVICE_ROLE_KEY ?? "")
 );
 
 async function getAuthUser(req: NextRequest) {

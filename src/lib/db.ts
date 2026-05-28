@@ -119,6 +119,20 @@ export async function fetchPlan(userId: string): Promise<Plan> {
   return data.plan as Plan;
 }
 
+export async function fetchPlanInfo(userId: string): Promise<{ plan: Plan; isSubscription: boolean }> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("plan, ls_subscription_id")
+    .eq("id", userId)
+    .single();
+
+  if (error) return { plan: "free", isSubscription: false };
+  return {
+    plan: data.plan as Plan,
+    isSubscription: !!data.ls_subscription_id,
+  };
+}
+
 // ---- Edges ----
 
 export async function fetchEdges(userId: string): Promise<{ id: string; source: string; target: string }[]> {

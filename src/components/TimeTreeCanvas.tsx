@@ -3,7 +3,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import html2canvas from "html2canvas";
+import { toPng } from "html-to-image";
 import {
   ReactFlow,
   Background,
@@ -13,6 +13,8 @@ import {
   useEdgesState,
   useReactFlow,
   ReactFlowProvider,
+  getNodesBounds,
+  getViewportForBounds,
   type Connection,
   type Node,
   type Edge,
@@ -31,7 +33,7 @@ import {
 import {
   fetchProjects,
   fetchMeetings,
-  fetchPlan,
+  fetchPlanInfo,
   insertProject,
   insertMeeting,
   updateMeeting,
@@ -112,6 +114,7 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [plan, setPlan] = useState<Plan>("free");
+  const [isSubscription, setIsSubscription] = useState(false);
   const [team, setTeam] = useState<Team | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
@@ -126,16 +129,17 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
   // 初回データ取得
   useEffect(() => {
     (async () => {
-      const [pjs, mtgs, userPlan, savedEdges, myTeam] = await Promise.all([
+      const [pjs, mtgs, planInfo, savedEdges, myTeam] = await Promise.all([
         fetchProjects(userId),
         fetchMeetings(userId),
-        fetchPlan(userId),
+        fetchPlanInfo(userId),
         fetchEdges(userId),
         fetchMyTeam(userId),
       ]);
       setProjects(pjs);
       setMeetings(mtgs);
-      setPlan(userPlan);
+      setPlan(planInfo.plan);
+      setIsSubscription(planInfo.isSubscription);
       setTeam(myTeam);
       setExtraEdges(savedEdges.map((e) => ({
         id: e.id,
@@ -160,9 +164,10 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
     const MAX_ATTEMPTS = 15; // 最大30秒 (2秒 × 15回)
 
     const poll = async () => {
-      const [newPlan, myTeam] = await Promise.all([fetchPlan(userId), fetchMyTeam(userId)]);
-      if (newPlan !== "free" || attempts >= MAX_ATTEMPTS) {
-        setPlan(newPlan);
+      const [planInfo, myTeam] = await Promise.all([fetchPlanInfo(userId), fetchMyTeam(userId)]);
+      if (planInfo.plan !== "free" || attempts >= MAX_ATTEMPTS) {
+        setPlan(planInfo.plan);
+        setIsSubscription(planInfo.isSubscription);
         setTeam(myTeam);
         return;
       }
@@ -360,33 +365,45 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
     await deleteEdgesByMeetingId(id);
   }, [setNodes, setExtraEdges]);
 
+  const { getNodes } = useReactFlow();
+
   const handleExport = useCallback(async () => {
     if (plan !== "pro" && plan !== "team") {
       alert("Proプランにアップグレードが必要です。");
       return;
     }
-    const target = document.querySelector<HTMLElement>(".react-flow__viewport");
-    if (!target) {
+    const vpElement = document.querySelector<HTMLElement>(".react-flow__viewport");
+    if (!vpElement) {
       alert("キャンバスの取得に失敗しました。");
       return;
     }
     try {
-      const canvas = await html2canvas(target, {
+      const IMAGE_W = 1920;
+      const IMAGE_H = 1080;
+      const allNodes = getNodes();
+      const bounds = getNodesBounds(allNodes);
+      const { x, y, zoom } = getViewportForBounds(bounds, IMAGE_W, IMAGE_H, 0.1, 2, 0.15);
+
+      const dataUrl = await toPng(vpElement, {
         backgroundColor: "#f1f5f9",
-        scale: 1,
-        useCORS: true,
-        allowTaint: true,
+        width: IMAGE_W,
+        height: IMAGE_H,
+        style: {
+          width: `${IMAGE_W}px`,
+          height: `${IMAGE_H}px`,
+          transform: `translate(${x}px, ${y}px) scale(${zoom})`,
+        },
       });
+
       const link = document.createElement("a");
-      const today = new Date().toISOString().slice(0, 10);
-      link.download = `meeting-time-tree-${today}.png`;
-      link.href = canvas.toDataURL("image/png");
+      link.download = `meeting-time-tree-${new Date().toISOString().slice(0, 10)}.png`;
+      link.href = dataUrl;
       link.click();
     } catch (e) {
       console.error("エクスポートに失敗しました:", e);
       alert("エクスポートに失敗しました。もう一度お試しください。");
     }
-  }, [plan]);
+  }, [plan, getNodes]);
 
   const handleLogout = useCallback(async () => {
     await supabase.auth.signOut();
@@ -472,6 +489,7 @@ function TimeTreeCanvasInner({ userId }: { userId: string }) {
       <Sidebar
         projects={projects}
         plan={plan}
+        isSubscription={isSubscription}
         onAddProject={handleAddProject}
         onAddMeeting={handleAddMeeting}
         onDeleteProject={handleDeleteProject}

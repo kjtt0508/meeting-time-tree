@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from "uuid";
 interface Props {
   projects: Project[];
   plan: Plan;
+  isSubscription: boolean;
   onAddProject: (project: Project) => void;
   onAddMeeting: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
@@ -25,7 +26,7 @@ const PRESET_COLORS = [
   "#EF4444", "#8B5CF6", "#EC4899",
 ];
 
-export default function Sidebar({ projects, plan, onAddProject, onAddMeeting, onDeleteProject, onLogout, onUpgrade, onBuyOnce, onCancel, onExport, onTeamSettings }: Props) {
+export default function Sidebar({ projects, plan, isSubscription, onAddProject, onAddMeeting, onDeleteProject, onLogout, onUpgrade, onBuyOnce, onCancel, onExport, onTeamSettings }: Props) {
   const [newName, setNewName] = useState("");
   const [selColor, setSelColor] = useState(PRESET_COLORS[0]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -163,14 +164,14 @@ export default function Sidebar({ projects, plan, onAddProject, onAddMeeting, on
           >
             チームを管理
           </button>
-        ) : (
+        ) : isSubscription ? (
           <button
             onClick={onCancel}
             className="w-full text-red-400 hover:text-red-300 bg-gray-800 hover:bg-gray-700 rounded-lg py-2 text-sm transition-colors"
           >
             サブスクリプションを解約
           </button>
-        )}
+        ) : null}
         <button
           onClick={onLogout}
           className="w-full text-gray-400 hover:text-white text-xs py-1"
