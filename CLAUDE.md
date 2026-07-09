@@ -140,15 +140,16 @@
 - ✅ チーム情報の救済 API（`/api/team/ensure`） — 過去のバグで `teams` 行未作成のユーザーを冪等救済
 - ✅ メンバー招待（`/api/team/invite` + `/verify` + `/accept` + Bearer 認証 + メール一致チェック）
 - ✅ TeamSettingsModal（招待リンク生成・メンバー一覧・削除・保留中招待管理）
+- ✅ 招待バリデーション強化（自己招待・既存メンバー・保留中の重複招待を事前拒否）+ 全エラーメッセージ日本語化（メール不一致時は期待アドレスとログイン中アドレスを明示）+ 既メンバー受諾時は冪等成功扱い
 
 ### 法令・LP
 - ✅ ランディングページ（`src/components/LandingPage.tsx`）
 - ✅ OGP動的生成（`src/app/opengraph-image.tsx`） + Twitter Card メタタグ
-- ✅ 利用規約（`/terms`）・プライバシーポリシー（`/privacy`）・特定商取引法表記（`/tokusho`）
+- ✅ 利用規約（`/terms`）・プライバシーポリシー（`/privacy`）・特定商取引法表記（`/tokusho` — MoR モデル対応に書き換え済み: 販売事業者=Lemon Squeezy, LLC / サービス提供者=K's Factory / お問い合わせ=ks.factory202605@gmail.com）
 
 ### インフラ
 - ✅ Supabase: edges/meetings に `ON DELETE CASCADE` 設定済み
-- ✅ Supabase RLS: teams/team_members/team_invitations に適用済み（本番環境での最終確認は残）
+- ✅ Supabase RLS: 全 7 テーブル分の policy SQL を `supabase/rls.sql` に整備（本番 SQL Editor での適用は残）
 - ✅ Vercel 本番デプロイ（`https://meeting-timetree.vercel.app`）
 - ✅ electron-builder appId `com.kajiwara.meeting-timetree` 設定済み
 
@@ -174,13 +175,16 @@
 
 > 詳細な「次回着手タスク」は本ドキュメント末尾の「セッションログ（2026-05-29）」セクションを参照。
 
-1. **【最優先】チーム招待の自己招待エラー対応** — 「This invitation is for a different email address」の改善
+1. **【最優先】Supabase RLS 本番反映** — `supabase/rls.sql` を Studio SQL Editor で実行 → `rls-audit.sql` で確認 → `rls-pentest.sql` で攻撃シミュレーション
 2. **Lemon Squeezy 本番モードへの切り替え** — 本番APIキー・WebhookSecret・Variant IDの差し替え
-3. **`/tokusho` の `[要記入]` 箇所** — 事業者名・住所・電話番号の記入
-4. **Supabase RLS ポリシー本番確認** — 一通り作成済みだが、本番環境で動作確認
-5. **Zenn/note 記事投稿 → Product Hunt 申請**
-6. **GitHub Releases で Electron 版を配布**
-7. **D-14 Electron オフライン対応の実装**（設計書あり — dexie.js + Optimistic Update + Sync Queue）
+3. **Zenn/note 記事投稿 → Product Hunt 申請**
+4. **GitHub Releases で Electron 版を配布**
+5. **D-14 Electron オフライン対応の実装**（設計書あり — dexie.js + Optimistic Update + Sync Queue）
+
+### 完了済み（このセッション）
+- ~~チーム招待の自己招待エラー対応~~ → 招待生成時の事前バリデーション追加 + accept側エラー日本語化 + 既メンバー冪等成功
+- ~~`/tokusho` の `[要記入]` 箇所~~ → MoR モデル対応に書き換え（Lemon Squeezy を販売事業者として明記、K's Factory をサービス提供者として記載）
+- ~~Supabase RLS ポリシー定義~~ → `supabase/rls.sql` / `rls-audit.sql` / `rls-pentest.sql` を整備（本番 SQL Editor での反映は未実施）
 
 ### Electron オフライン対応 設計サマリ
 - dexie.js（IndexedDB）でローカルキャッシュ
@@ -236,38 +240,104 @@
 
 ## 🚧 次回着手タスク（優先順）
 
-### 1. **【最優先】チーム招待の自己招待エラー対応**
-**症状**: 招待ページで「This invitation is for a different email address」エラー
+### 1. **【最優先】Supabase RLS 本番反映**
 
-**原因**: `/api/team/invite/accept/route.ts:48-55` — 招待メールアドレスと受諾ユーザーのメールアドレスが一致しないと 403 を返す（IDOR対策）。オーナーが自分自身を招待した、または別のメールアドレスでログイン中の場合に発生。
+整備済みファイル: `supabase/rls.sql` / `supabase/rls-audit.sql` / `supabase/rls-pentest.sql`
 
-**修正方針候補**:
-- (a) オーナーが自分自身を招待した場合は許可する（同一userIdなら即チームメンバーに追加）
-- (b) 招待生成時に既存メンバー/オーナーへの招待を拒否する
-- (c) エラーメッセージを日本語化して原因を明示（「この招待は別のメールアドレス宛です。送信先と同じアカウントでログインしてください」）
+**手順**:
+1. Supabase Studio → SQL Editor を開く（**postgres ロール推奨**）
+2. `supabase/rls.sql` を全文コピペして実行 → 全テーブルで RLS ENABLE + policy + helper関数 + handle_new_user トリガが作成される（冪等）
+3. `supabase/rls-audit.sql` を実行し、各セクション (A〜G) の期待結果と一致するか目視確認
+   - A: 全 7 テーブルが rls_enabled=true
+   - B/C: policy 数が期待値（profiles=1, projects/meetings/edges=4 each, teams/team_members/team_invitations=1）
+   - D: is_team_member/is_team_admin が SECURITY DEFINER で 2 件
+   - E: authenticated に EXECUTE 権限あり
+   - F/G: 結果 0 行
+4. `supabase/rls-pentest.sql` の冒頭で 2 ユーザー uid（被害者・攻撃者）を実値に置換 → 実行
+   - **TEST 0 (sanity) が FAIL** の場合は SQL Editor ベースは諦め、下記の実機テストに切替
+   - TEST 1〜12 が全て `>>> OK` になることを確認
+5. **実機 2 アカウントテスト**（必須）:
+   - 別ブラウザ/シークレットで A・B 2 アカウント作成
+   - A でプロジェクト作成 → meeting 追加 → edge 接続
+   - B でログインして A のデータが**画面上一切見えない**ことを確認
+   - B でアプリ内のあらゆる操作（新規作成・編集・削除・Pro 購入）を行い、A のデータが影響を受けないこと
+6. 不備があれば `rls.sql` の policy を修正して 2〜5 を再実行
 
-→ (a) + (c) の組み合わせ推奨。
-
-**関連ファイル**:
-- `src/app/api/team/invite/accept/route.ts:48-55`（メール一致チェック）
-- `src/app/api/team/invite/route.ts`（招待生成 — 自分宛拒否の事前チェック追加）
-- `src/app/invite/page.tsx`（エラー表示の日本語化）
+**設計判断（レビュー + 実行時エラー反映）**:
+- `profiles` は INSERT も含めて authenticated からの書き込みを一切許可せず、`handle_new_user` トリガで auth.users 作成時に自動生成 → 自己昇格の経路を恒久封鎖
+- `team_*` 系 policy は **`profiles.team_id` と `teams.owner_id` を直接参照する非再帰設計** に変更（当初 SECURITY DEFINER 関数で実装したが、Supabase の権限環境で BYPASSRLS が効かず `team_members` policy が無限再帰した）
+- `teams` SELECT は `owner_id = auth.uid() OR id = (SELECT team_id FROM profiles WHERE id = auth.uid())`
+- `team_members` SELECT は `team_id = (SELECT team_id FROM profiles WHERE id = auth.uid())`
+- `team_invitations` SELECT は `team_id IN (SELECT id FROM teams WHERE owner_id = auth.uid())` — owner のみ（admin の閲覧が必要になれば SECURITY DEFINER RPC を別途追加）
+- `team_members.role` / `team_invitations.role` に CHECK 制約 → ロール値域を DB レベルで保証
 
 ### 2. Lemon Squeezy 本番モードへの切り替え
 - 本番APIキー発行 → Vercel 環境変数 `LEMONSQUEEZY_API_KEY` 差し替え
 - Webhook URL を本番モードで再登録 → `LEMONSQUEEZY_WEBHOOK_SECRET` 更新
 - 本番モードの Variant ID で `LEMONSQUEEZY_*_VARIANT_ID` を上書き
 
-### 3. `/tokusho`（特定商取引法表記）の `[要記入]` 箇所を実情報で埋める
-事業者名・住所・電話番号
+### 3. Zenn/note 記事投稿 → Product Hunt 申請
 
-### 4. Supabase RLS ポリシー本番確認
+### 4. Electron 版を GitHub Releases で配布
 
-### 5. Zenn/note 記事投稿 → Product Hunt 申請
+### 5. D-14 Electron オフライン対応の実装（設計書あり）
 
-### 6. Electron 版を GitHub Releases で配布
+---
 
-### 7. D-14 Electron オフライン対応の実装（設計書あり）
+## 既知のアプリケーションレベル問題（RLS では塞げない、別途対応）
+
+### Team 招待 accept による plan 上書き問題
+**症状**: Pro プラン購読中のユーザーが Team 招待を accept すると、`profiles.plan = "team"` に上書きされ、`ls_subscription_id` は温存される。その後 team から外れると `plan = "free", team_id = null` に戻るが、`ls_subscription_id` だけが残った状態に。
+
+**関連ファイル**:
+- `src/app/api/team/invite/accept/route.ts:113-117` — plan 上書き
+- `src/app/api/team/members/route.ts:130-133` — kick 時の profile 戻し
+
+**対応方針案**:
+- accept 時に既存の `ls_subscription_id` があれば「Team 加入で Pro が無効化されます」旨を確認 UI で表示
+- または team_members に `previous_plan` カラムを追加して accept 前の状態を退避し、kick 時に復元
+
+---
+
+## ✅ 本セッション完了タスク（2026-05-29 後半）
+
+### C. Supabase RLS ポリシー整備
+**新規ファイル**:
+- `supabase/rls.sql` — 全 7 テーブルの RLS ENABLE + policy + helper関数 (`is_team_member`, `is_team_admin`) + `handle_new_user` トリガ + role CHECK 制約。冪等な定義
+- `supabase/rls-audit.sql` — A〜G の 7 セクションで RLS 状態を確認するクエリ集
+- `supabase/rls-pentest.sql` — TEST 0 (sanity) + TEST 1〜12 の攻撃シミュレーション（BEGIN ... ROLLBACK で本番影響なし）
+
+**設計ポイント**:
+- profiles の書き込み（INSERT/UPDATE/DELETE）は authenticated に一切許可せず、トリガ + service_role のみに集約
+- helper 関数は SECURITY DEFINER + search_path 固定で再帰回避
+- pr-review-toolkit:code-reviewer に網羅性レビューを依頼し、High/Medium 指摘 (H-1, M-1, M-3, M-4, L-1, L-2, L-3, L-5) を全て反映済み
+
+**残作業**: 本番 SQL Editor での適用 + 実機 2 アカウントテスト（手順は「🚧 次回着手タスク #1」を参照）
+
+### A. チーム招待バリデーション強化
+**変更ファイル**:
+- `src/app/api/team/invite/route.ts` — 招待生成 POST に事前バリデーション追加
+  - 自分自身のメールへの招待を 400 で拒否
+  - 既にチームメンバーの場合は 400 で拒否（`auth.admin.listUsers` で email→user_id 解決後に `team_members` をチェック）
+  - 既存の pending 招待がある場合は 400 で拒否
+  - DB保存時に email を `trim().toLowerCase()` で正規化
+  - 全エラーメッセージを日本語化
+- `src/app/api/team/invite/accept/route.ts` — 受諾 POST のエラー文言整備
+  - メール不一致時に **期待アドレスとログイン中アドレスの両方** を出す
+  - 既メンバー検出時は `invitations.status = accepted` に更新して冪等成功
+  - 全エラーメッセージを日本語化
+- `src/app/invite/page.tsx` — 変更なし（API 側が日本語エラーを返すので既存表示で対応可）
+
+### B. `/tokusho` を MoR モデル対応に書き換え
+**変更ファイル**: `src/app/tokusho/page.tsx`
+- 冒頭の黄色 ⚠️ 注意書きを削除 → MoR 説明ボックスに置換
+- 「販売事業者（Merchant of Record）」: Lemon Squeezy, LLC（米国法人）/ 222 South Main Street Suite 500, Salt Lake City, UT 84101, USA + LS 利用規約リンク
+- 「サービス提供者」欄を新設: K's Factory
+- 「お問い合わせ先」: ks.factory202605@gmail.com
+- 「所在地」: 「請求があれば遅滞なく開示」運用（個人住所の公開を回避）
+- 「電話番号」: 「メール対応 / 請求があれば遅滞なく開示」
+- 「販売価格」に買い切り ¥3,980 を追加
+- 「返品・キャンセル」に「返金は LS が受付」の補足追加
 
 ---
 

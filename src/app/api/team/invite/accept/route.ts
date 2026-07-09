@@ -36,26 +36,36 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (inviteError || !invitation) {
-      return NextResponse.json({ error: "Invitation not found" }, { status: 400 });
+      return NextResponse.json({ error: "招待が見つかりません" }, { status: 400 });
     }
     if (invitation.status !== "pending") {
-      return NextResponse.json({ error: `Invitation is ${invitation.status}` }, { status: 400 });
+      const statusJa =
+        invitation.status === "accepted" ? "受諾済み"
+        : invitation.status === "cancelled" ? "取り消し済み"
+        : invitation.status === "expired" ? "期限切れ"
+        : invitation.status;
+      return NextResponse.json(
+        { error: `この招待は既に${statusJa}です` },
+        { status: 400 }
+      );
     }
     if (new Date(invitation.expires_at) < new Date()) {
-      return NextResponse.json({ error: "Invitation has expired" }, { status: 400 });
+      return NextResponse.json({ error: "この招待は期限切れです" }, { status: 400 });
     }
+
+    const teamId: string = invitation.team_id;
 
     // 招待メールアドレスと受諾ユーザーのメールアドレスが一致するか確認
     const inviteeEmail = (user.email ?? "").trim().toLowerCase();
     const expectedEmail = (invitation.email ?? "").trim().toLowerCase();
     if (!inviteeEmail || inviteeEmail !== expectedEmail) {
       return NextResponse.json(
-        { error: "This invitation is for a different email address" },
+        {
+          error: `この招待は ${expectedEmail} 宛です。現在ログイン中のアカウント（${inviteeEmail || "メールアドレス未設定"}）と異なります。送信先と同じメールアドレスでログインし直してください。`,
+        },
         { status: 403 }
       );
     }
-
-    const teamId: string = invitation.team_id;
 
     // 重複メンバーチェック
     const { data: existing } = await supabaseAdmin
@@ -66,7 +76,12 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     if (existing) {
-      return NextResponse.json({ error: "Already a member" }, { status: 400 });
+      // 既にメンバーなら invitation を accepted にして冪等成功扱い
+      await supabaseAdmin
+        .from("team_invitations")
+        .update({ status: "accepted", accepted_at: new Date().toISOString() })
+        .eq("id", invitation.id);
+      return NextResponse.json({ success: true, alreadyMember: true });
     }
 
     // メンバー数上限チェック
@@ -82,7 +97,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (count !== null && teamRow && count >= teamRow.max_members) {
-      return NextResponse.json({ error: "Team is full" }, { status: 400 });
+      return NextResponse.json({ error: "チームのメンバー上限に達しています" }, { status: 400 });
     }
 
     // team_members に INSERT
@@ -92,7 +107,7 @@ export async function POST(req: NextRequest) {
 
     if (memberError) {
       console.error("Failed to insert team member:", JSON.stringify(memberError));
-      return NextResponse.json({ error: "Failed to join team" }, { status: 500 });
+      return NextResponse.json({ error: "チームへの参加に失敗しました" }, { status: 500 });
     }
 
     // profiles を plan: "team", team_id に UPDATE
@@ -103,7 +118,7 @@ export async function POST(req: NextRequest) {
 
     if (profileError) {
       console.error("Failed to update profile:", JSON.stringify(profileError));
-      return NextResponse.json({ error: "Failed to update profile" }, { status: 500 });
+      return NextResponse.json({ error: "プロフィールの更新に失敗しました" }, { status: 500 });
     }
 
     // invitation の status を accepted に UPDATE
