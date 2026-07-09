@@ -148,9 +148,11 @@
 - ✅ 利用規約（`/terms`）・プライバシーポリシー（`/privacy`）・特定商取引法表記（`/tokusho` — MoR モデル対応に書き換え済み: 販売事業者=Lemon Squeezy, LLC / サービス提供者=K's Factory / お問い合わせ=ks.factory202605@gmail.com）
 
 ### インフラ
-- ✅ Supabase: edges/meetings に `ON DELETE CASCADE` 設定済み
-- ✅ Supabase RLS: 全 7 テーブル分の policy SQL を `supabase/rls.sql` に整備（本番 SQL Editor での適用は残）
-- ✅ Vercel 本番デプロイ（`https://meeting-timetree.vercel.app`）
+- ✅ Supabase: 2026-07-09 に新プロジェクト（ref: `ztpsqwndwflxyhwuplfb`, 東京リージョン）へ移行 — 旧プロジェクト `hxoduclhqwramihdtkvd` はアカウント不明のため放棄。旧データは引き継がず全ユーザー再登録
+- ✅ Supabase スキーマ: `supabase/schema.sql`（全7テーブル + FK + CASCADE + CHECK + index）を Management API 経由で適用済み
+- ✅ Supabase RLS: `supabase/rls.sql` を本番適用済み（2026-07-09）。監査クエリで全7テーブル RLS 有効・policy 数期待値一致・`handle_new_user` トリガ作成を確認済み。実機 2 アカウントテストは未実施
+- ✅ Supabase Auth: Site URL = `https://meeting-timetree.vercel.app`, リダイレクト許可 = 本番 + `http://localhost:3000/**`
+- ✅ Vercel 本番デプロイ（`https://meeting-timetree.vercel.app`） — 環境変数を新 Supabase の値に差し替え、旧 Stripe 変数は削除済み（2026-07-09）
 - ✅ electron-builder appId `com.kajiwara.meeting-timetree` 設定済み
 
 ---
@@ -173,9 +175,9 @@
 
 ## 残タスク（優先順 — 2026-05-29 時点）
 
-> 詳細な「次回着手タスク」は本ドキュメント末尾の「セッションログ（2026-05-29）」セクションを参照。
+> 2026-07-09 更新: Supabase を新プロジェクトへ移行し、schema.sql + rls.sql を適用済み。
 
-1. **【最優先】Supabase RLS 本番反映** — `supabase/rls.sql` を Studio SQL Editor で実行 → `rls-audit.sql` で確認 → `rls-pentest.sql` で攻撃シミュレーション
+1. **【最優先】実機 2 アカウントテスト** — 新 Supabase での動作確認（サインアップ→プロジェクト作成→RLS 分離確認）。手順は「セッションログ（2026-05-29）」の次回着手タスク #1 手順5を参照
 2. **Lemon Squeezy 本番モードへの切り替え** — 本番APIキー・WebhookSecret・Variant IDの差し替え
 3. **Zenn/note 記事投稿 → Product Hunt 申請**
 4. **GitHub Releases で Electron 版を配布**
@@ -351,3 +353,21 @@ const stripBOM = (s: string) => s.replace(/^﻿/, "").trim();
 
 適用済み箇所: `src/lib/supabase.ts`, `src/app/layout.tsx`, `src/app/api/ls/{checkout,webhook,cancel}/route.ts`, `src/app/api/team/{invite,invite/verify,invite/accept,members,ensure}/route.ts`
 
+
+---
+
+## セッションログ（2026-07-09）— Supabase 新プロジェクト移行
+
+旧 Supabase プロジェクト（`hxoduclhqwramihdtkvd`）のアカウントが不明になったため、新アカウントでプロジェクトを作り直した。
+
+### 実施内容
+1. **未コミット分の整理**: 5/29 の成果物（招待バリデーション・tokusho MoR・RLS SQL）をコミット。GitHub コラボレータ招待（tkajiwaracingroup2012）で push 権限を解決し、origin/main を最新化
+2. **`supabase/schema.sql` 新規作成**: コード（`src/lib/db.ts`, `src/lib/team.ts`, API ルート）から全7テーブルの完全スキーマを逆算。注意点: `edges.id` は ReactFlow 由来の**文字列**（`e-custom-<src>-<tgt>-<ts>`）なので text 型、projects/meetings の id はクライアント uuidv4。`team_invitations.token` は DB デフォルト（`gen_random_bytes(24)` hex）で自動生成される前提（API は INSERT 後に SELECT で token を取得する実装）
+3. **新プロジェクト（ref: `ztpsqwndwflxyhwuplfb`, 東京）に Management API で適用**: `schema.sql` → `rls.sql` → 監査クエリ（全テーブル RLS 有効、policy 数一致、トリガ確認）まで完了
+4. **Auth 設定**: Site URL / uri_allow_list を Management API（`PATCH /v1/projects/{ref}/config/auth`）で設定
+5. **環境変数差し替え**: `.env.local` を新キーで書き直し（BOM なし）。Vercel CLI をインストール → production の `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` を差し替え、旧 Stripe 変数 6 個を削除 → 本番再デプロイ
+
+### 学び・運用メモ
+- Supabase Management API（`POST /v1/projects/{ref}/database/query` + `sbp_` トークン）で SQL 適用が自動化できる。Studio SQL Editor 手作業は不要
+- Vercel CLI 認証はユーザーの `vercel login`（ブラウザ）が必要。以後は `vercel env add/rm` + `vercel redeploy` で完結
+- **旧プロジェクトのデータは移行していない**（販売前のためテストデータのみ）。全ユーザーは再サインアップが必要
