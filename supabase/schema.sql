@@ -123,6 +123,22 @@ create table if not exists public.team_invitations (
 create index if not exists team_invitations_team_id_idx on public.team_invitations (team_id);
 create index if not exists team_invitations_token_idx   on public.team_invitations (token);
 
+-- ---------------------------------------------------------------------
+-- ロール権限 GRANT（Supabase 標準構成の再現）
+-- ---------------------------------------------------------------------
+-- Studio 以外（Management API / psql / マイグレーション）でテーブルを作ると
+-- anon / authenticated / service_role へのテーブル権限が付かず、
+-- アプリからのアクセスが全て 42501 (permission denied) になる。
+-- RLS が行レベルの分離を担保するため、テーブルレベルは ALL を付与してよい。
+
+grant usage on schema public to anon, authenticated, service_role;
+grant all on all tables    in schema public to anon, authenticated, service_role;
+grant all on all sequences in schema public to anon, authenticated, service_role;
+grant all on all functions in schema public to anon, authenticated, service_role;
+alter default privileges in schema public grant all on tables    to anon, authenticated, service_role;
+alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
+
 -- =====================================================================
 -- END — 続けて rls.sql を実行すること
 -- =====================================================================

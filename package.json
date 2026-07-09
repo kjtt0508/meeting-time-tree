@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
     "electron:dev": "BUILD_TARGET=electron next build && npx esbuild electron/src/main.ts electron/src/preload.ts --bundle=false --platform=node --outdir=electron --format=cjs && electron .",
     "electron:build": "BUILD_TARGET=electron next build && npx esbuild electron/src/main.ts electron/src/preload.ts --bundle=false --platform=node --outdir=electron --format=cjs && electron-builder"
   },
@@ -32,9 +33,11 @@
     "electron-builder": "^26.8.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "playwright": "^1.61.1",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   },
   "build": {
     "appId": "com.kajiwara.meeting-timetree",

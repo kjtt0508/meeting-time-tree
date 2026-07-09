@@ -12,7 +12,7 @@ const supabaseAdmin = createClient(
 );
 
 function verifySignature(rawBody: string, signature: string): boolean {
-  const secret = process.env.LEMONSQUEEZY_WEBHOOK_SECRET!;
+  const secret = stripBOM(process.env.LEMONSQUEEZY_WEBHOOK_SECRET ?? "");
   const digest = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
   try {
     return crypto.timingSafeEqual(Buffer.from(signature, "hex"), Buffer.from(digest, "hex"));
